@@ -1,0 +1,18 @@
+{
+  "name": "makemytour",
+  "version": "1.0.0",
+  "description": "Local Tourism Package Booking System",
+  "main": "server/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js",
+    "db:setup": "node database/setup.js",
+    "test": "node --test tests/"
+  },
+  "dependencies": {
+    "mysql2": "^3.11.0"
+  }
+}
