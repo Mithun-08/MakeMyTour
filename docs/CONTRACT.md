@@ -1,6 +1,6 @@
 # Part 1: Shared Architecture and Integration Contract
 
-Member 1 copies this whole Part 1 into the repo as `docs/CONTRACT.md` on Day 1. Every prompt in Part 4 points to it.
+**Source of truth:** Commit this file as `docs/CONTRACT.md` before feature work begins. All three members and every Antigravity task prompt must follow it. The seven-day schedule is 26 October–1 November 2026, with approximately 1–2 hours per member per day. The assignment's full feature list remains the target, but delivery order is governed by Section 1.9.
 
 ---
 
@@ -50,6 +50,14 @@ MakeMyTour/
   tests/smoke.test.js         M1
 ```
 
+### Seven-Day Workstream Ownership (Authoritative)
+
+- **M1 — Mithun:** server core, database schema/setup, configuration, HTTP/router utilities, password/session/authentication, profile, admin user management, Super Admin, logs/settings, smoke tests, integration and final README.
+- **M2 — Mehar­naz (Member 2):** shared frontend foundation on Day 1; public catalog UI; catalog/destination/category APIs; provider package/availability APIs and UI; provider reports/reviews APIs; provider booking UI. M2 owns `catalog.routes.js`, `packages.routes.js`, `providerPackages.routes.js`, `availability.routes.js`, `adminPackages.routes.js`, and `providerReports.routes.js`.
+- **M3 — Mehar­naz (Member 3):** catalog and booking seed data; booking, payment, review and customer/admin report APIs; customer booking/review UI; admin reporting UI; role and booking regression tests. M3 owns `bookings.routes.js`, `payments.routes.js`, `reviews.routes.js`, and `reports.routes.js`.
+- The two members entered as Mehar­naz must be distinguished operationally as **Member 2 (M2)** and **Member 3 (M3)** until their separate GitHub usernames are confirmed. Do not assume they are the same GitHub account.
+- The owner of a file is responsible for its changes and tests. Other members raise a GitHub issue or coordinate a patch rather than editing the file independently.
+
 ### Ownership Rules (Prevents Merge Conflicts)
 * **One owner per file:** Need a change in someone else's file? Open a GitHub Issue or message them. Never edit it yourself.
 * **Foundation files frozen after Day 1:** `server core`, `utils`, `style.css`, `api.js`, `ui.js`, `auth.js`, `layout.js` are frozen after Day 1. Bug fixes go to the owner.
@@ -62,7 +70,7 @@ MakeMyTour/
 
 1. Install MySQL 8 and make sure the server is running. Note your root password.
 2. Copy `.env.example` to `.env` and fill in your own values: `PORT=3000`, `DB_HOST=localhost`, `DB_PORT=3306`, `DB_USER=root`, `DB_PASSWORD=<yours>`, `DB_NAME=makemytour`, `SESSION_TTL_MINUTES=120`.
-3. `npm install`, then `npm run db:setup` (drops and recreates the `makemytour` database, so it is dev-only and safe to re-run any time), then `npm start`. Open `http://localhost:3000`.
+3. `npm install`, then verify `.env` points only to your dedicated local development database before running `npm run db:setup`. This command DROPS and recreates the configured database; never run it against a shared, production, or data-bearing database. Then run `npm start` and open `http://localhost:3000`.
 4. After every git pull that changes anything in `database/`, run `npm run db:setup` again.
 
 ### Demo Accounts (Created by setup.js, password for all: Password@123)
@@ -235,17 +243,17 @@ CREATE TABLE system_settings ( -- ADDED for Super Admin settings
 ```
 
 ### Relationships and Status Meanings
-* **Relationships follow section 9 of the spec:** destination and category to many packages, provider to many packages, package to many itinerary rows and availability dates, customer to many bookings, booking to one package, one availability date, one payment and one review, admin to many permissions.
+* **Relationships follow section 9 of the spec:** destination and category to many packages, provider to many packages, package to many itinerary rows and availability dates, customer to many bookings, booking to one package, one availability date, one payment and one review, admin to many permissions. Because the schema's separate `package_id` and `availability_id` foreign keys do not ensure that the availability belongs to that package, the booking handler MUST verify the pair together inside the transaction before locking/decrementing seats.
 * **Status meanings:**
-  * **Package:** `PENDING` (awaiting Admin), `APPROVED` (public), `REJECTED`, `DISABLED` (hidden by Admin or provider). Only `APPROVED` packages whose provider is `ACTIVE` appear publicly.
+  * **Package:** `PENDING` (awaiting Admin), `APPROVED` (public), `REJECTED`, `DISABLED` (hidden). Only `APPROVED` packages whose provider is `ACTIVE` appear publicly. A provider may disable their own approved package, but must not re-enable a package disabled/rejected by Admin; do not allow a provider action to override moderation. If the single status field cannot distinguish who disabled it, allow provider re-enable only when the contract/application can safely establish that the package was provider-disabled; otherwise require Admin moderation.
   * **Availability:** `OPEN`, `CLOSED` (provider closed it), `FULL` (seats_available reached 0).
   * **Booking:** `PENDING` (created), `CONFIRMED` (provider or Admin), `CANCELLED`, `COMPLETED` (travel date reached).
   * **Provider users:** `PENDING` until approved.
   * **User status:** `ACTIVE`, `PENDING`, `BLOCKED`, `REJECTED`, `INACTIVE`.
 
 ### Seed Data Contract (Develop Against the Same Data)
-* **`seeds/02_catalog.sql` (M3):** 6 destinations, 5 categories, at least 8 packages across provider ids 4 and 5 (mostly `APPROVED`, one `PENDING`, one `DISABLED`), 3 to 5 itinerary days each, 4 or more availability dates per package written as `DATE_ADD(CURDATE(), INTERVAL n DAY)` so the data never goes stale.
-* **`seeds/03_bookings.sql` (M3):** At least 8 bookings for customers 7 and 8 covering all four booking statuses, payments for paid ones, and 3 reviews on `COMPLETED` bookings.
+* **`seeds/02_catalog.sql` (M3, seed-data ownership):** 6 destinations, 5 categories, at least 8 packages across provider ids 4 and 5 (mostly `APPROVED`, one `PENDING`, one `DISABLED`), 3 to 5 itinerary days each, 4 or more availability dates per package written as `DATE_ADD(CURDATE(), INTERVAL n DAY)` so the data never goes stale.
+* **`seeds/03_bookings.sql` (M3, seed-data ownership):** At least 8 bookings for customers 7 and 8 covering all four booking statuses, payments for paid ones, and 3 reviews on `COMPLETED` bookings.
 * Seeds must be re-runnable on a fresh database and use fixed ids.
 
 ---
@@ -471,12 +479,44 @@ Every page uses this skeleton (the page's own JS file goes last):
 
 ---
 
-## 1.9 Priorities if Time Runs Short
+## 1.9 Seven-Day Delivery Priorities (26 October–1 November 2026)
 
-| Tier | Features |
+The university assignment's full feature list remains the overall target. Given the team's available time (approximately 1–2 hours per person per day, or 21–42 person-hours total), the seven-day plan must prioritize a coherent, testable end-to-end application over broad unfinished scaffolding. Do not claim unimplemented features are complete.
+
+| Tier | Seven-day delivery target |
 | :--- | :--- |
-| **P0 (must work end to end)** | Register and login for four roles with RBAC, provider approval, destination and category CRUD, package create, edit, delete with itinerary and availability, package moderation, search and filters, package details, booking with seat control, simulated payment, cancellation, booking history, provider booking confirm, customer user management (block and unblock), Super Admin admins and permissions, system logs, reviews |
-| **P1 (needed for full marks on the spec)** | Admin and customer and provider reports, system settings, profile and password change, admin dashboard stats, responsive layout on every page, form validation messages |
-| **P2 (only if everything above is done)** | Image upload from the browser, charts beyond simple CSS bars, wishlist, pagination polish, automated tests beyond the smoke test |
+| **P0 — end-to-end core** | Server/database startup; registration/login/logout and server-side RBAC for all four roles; provider approval; public destination/category/package browsing and details; provider package create/edit/availability; admin package moderation; booking with transactional seat control; customer booking history and eligible cancellation; provider booking confirmation; smoke tests and setup documentation. |
+| **P1 — implement after P0 works** | Simulated payment records (not a real payment gateway); reviews for completed bookings; customer/provider/admin booking management; customer/provider blocking and approval controls; Super Admin admin accounts and permissions; system logs; essential admin/provider/customer reports. |
+| **P2 — only after core flows pass** | System settings UI, profile/password changes, advanced filters and pagination polish, charts, image upload, extensive responsive refinements and additional automated tests. |
 
-**If behind schedule, cut in this order:** P2 items, then charts (use tables), then settings page (keep API), then profile password change.
+### Seven-Day Work Schedule
+
+- **Day 1 — 26 Oct:** M1 verifies/commits contract, schema, setup foundation and test command; M2 builds shared frontend foundation; M3 prepares seed data and booking acceptance tests. Freeze API shapes and file ownership.
+- **Day 2 — 27 Oct:** M1 builds authentication/session behavior; M2 builds public catalog/destination/category APIs and browsing UI in their owned files; M3 completes catalog/booking seed fixtures and validates API/booking test cases. Coordinate dependencies explicitly.
+- **Day 3 — 28 Oct:** M1 completes server-side RBAC and essential admin user operations; M2 builds provider package/availability APIs and UI; M3 implements transactional booking creation.
+- **Day 4 — 29 Oct:** M1 completes profile/essential admin API work; M2 builds customer booking screens; M3 implements booking history/cancellation and minimal simulated payment/review endpoints.
+- **Day 5 — 30 Oct:** M1 implements moderation and remaining essential admin APIs; M2 completes provider booking management; M3 builds customer review and core admin screens.
+- **Day 6 — 31 Oct:** M1 completes feasible Super Admin/security work; M2 runs UI regression and responsive fixes; M3 implements basic reports and tests booking/payment/review consistency.
+- **Day 7 — 1 Nov:** M1 integrates reviewed branches and finalizes README/setup instructions; M2 verifies customer/provider browser flows and captures genuine screenshots; M3 verifies all four roles, booking constraints and documents passed/failed/blocked tests.
+
+### Daily Integration Gates
+
+1. **Day 1:** All members can clone, install dependencies, understand ownership and agree on API envelopes and startup procedure.
+2. **Day 2:** Public catalog reads real database data; auth endpoints are testable; seed/setup process is repeatable.
+3. **Day 3:** Server-side role/ownership checks work; booking rejects invalid capacity and mismatched package/availability pairs.
+4. **Day 4:** Customer can create/view/cancel an eligible booking; seats are restored exactly once.
+5. **Day 5:** Admin moderation affects public visibility; providers see/manage only their own packages and bookings.
+6. **Day 6:** Clean setup and role smoke tests work; stop adding large features if critical flows fail.
+7. **Day 7:** Regression checklist, README, screenshots of verified features and actual incremental commit history are ready.
+
+### If Time Runs Short
+
+Cut P2 first, then reduce report/chart polish. Keep the server-side authorization, database integrity, package discovery and customer booking/cancellation journey working. A simulated payment must be clearly labeled as a demo and must not collect real card details. Record incomplete requirements honestly in the README.
+
+### Git and Collaboration Rules
+
+- Each member works on their own feature branch and makes incremental commits that correspond to actual changes.
+- Open a pull request to `main`; the owner reports tests actually run, and M1 checks contract compatibility before merging.
+- Pull the latest `main` before starting a new task. Resolve conflicts with the owner of the affected file.
+- Never create fake commits, backdate commits, or claim work by another member. Commit history must represent real contributions.
+- `npm test` must be verified early; create `tests/smoke.test.js` on Day 1 so the configured test command has a real test file.
