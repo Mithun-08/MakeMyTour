@@ -3,17 +3,156 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MakeMyTour — Local Tourism Package Booking</title>
+  <title>Home | MakeMyTour — Local Tourism Package Booking</title>
+  <meta name="description" content="Discover and book local tourism packages curated by trusted local providers. Explore destinations, compare packages and book your next adventure with MakeMyTour.">
+
+  <!-- Shared stylesheet (M2, frozen Day 1) -->
   <link rel="stylesheet" href="/css/style.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+
+  <!-- Header filled by layout.js -->
   <header id="site-header"></header>
+
   <main id="app" class="container">
-    <h1>MakeMyTour</h1>
-    <p>Local Tourism Package Booking System — server is running.</p>
-    <p><a href="/login.html">Login</a> | <a href="/register.html">Register</a></p>
+
+    <!-- ══ Hero ══════════════════════════════════════════════ -->
+    <section class="hero" aria-labelledby="hero-heading">
+      <div class="hero-content">
+        <span class="hero-eyebrow">🧭 Local Tourism · India</span>
+        <h1 id="hero-heading">Find Your Perfect<br>Local Adventure</h1>
+        <p class="hero-lead">
+          Browse hundreds of curated packages across breathtaking destinations,
+          all crafted by verified local providers.
+        </p>
+
+        <!-- Hero search -->
+        <form id="hero-search-form" role="search" aria-label="Search packages">
+          <div class="hero-search">
+            <input
+              id="hero-search-input"
+              class="hero-search-input"
+              type="search"
+              name="q"
+              placeholder="Search destinations, categories or package names…"
+              autocomplete="off"
+              aria-label="Search packages"
+            >
+            <button type="submit" class="btn btn-accent" id="hero-search-btn">
+              Search
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ══ Destinations strip ════════════════════════════════ -->
+    <section class="section" aria-labelledby="dest-heading">
+      <div class="section-head">
+        <h2 class="section-title" id="dest-heading">Popular Destinations</h2>
+        <a class="section-link" href="/destinations.html">View all →</a>
+      </div>
+      <!--
+        Populated by home.js via api.get('/api/destinations').
+        Shows loading → chips or empty/error state.
+      -->
+      <div id="home-dest-list" class="dest-chips" aria-live="polite" aria-label="Destination list">
+        <!-- JS inserts destination chips here -->
+      </div>
+    </section>
+
+    <!-- ══ Featured Packages ════════════════════════════════ -->
+    <section class="section" aria-labelledby="featured-heading">
+      <div class="section-head">
+        <h2 class="section-title" id="featured-heading">Featured Packages</h2>
+        <a class="section-link" href="/packages.html">See all packages →</a>
+      </div>
+
+      <!-- Filter / search bar -->
+      <form id="home-search-form" class="search-bar" style="max-width:480px; margin-bottom:var(--sp-6);" role="search" aria-label="Filter packages">
+        <input
+          id="home-search-input"
+          class="search-bar-input"
+          type="search"
+          name="q"
+          placeholder="Filter packages…"
+          autocomplete="off"
+          aria-label="Filter packages"
+        >
+        <button type="submit" class="btn btn-primary search-bar-btn" id="home-search-btn">
+          Search
+        </button>
+      </form>
+
+      <!--
+        Populated by home.js via api.get('/api/packages', { sort:'rating', pageSize:6 }).
+        Shows loading → package cards or empty/error state.
+      -->
+      <div id="home-featured-grid" class="grid grid-3" aria-live="polite" aria-label="Featured packages">
+        <!-- JS inserts package cards here -->
+      </div>
+    </section>
+
+    <!-- ══ How it works ═════════════════════════════════════ -->
+    <section class="section" aria-labelledby="how-heading">
+      <h2 class="section-title text-center" id="how-heading" style="margin-bottom:var(--sp-8);">How MakeMyTour Works</h2>
+      <div class="grid grid-3">
+
+        <div class="card" style="padding:var(--sp-8); text-align:center;">
+          <div style="font-size:3rem; margin-bottom:var(--sp-4);" aria-hidden="true">🔍</div>
+          <h3 style="margin-bottom:var(--sp-2);">1. Discover</h3>
+          <p class="text-muted">Browse destinations and compare packages from trusted local providers.</p>
+        </div>
+
+        <div class="card" style="padding:var(--sp-8); text-align:center;">
+          <div style="font-size:3rem; margin-bottom:var(--sp-4);" aria-hidden="true">📅</div>
+          <h3 style="margin-bottom:var(--sp-2);">2. Book</h3>
+          <p class="text-muted">Choose your travel date, number of travellers and confirm your booking instantly.</p>
+        </div>
+
+        <div class="card" style="padding:var(--sp-8); text-align:center;">
+          <div style="font-size:3rem; margin-bottom:var(--sp-4);" aria-hidden="true">🌄</div>
+          <h3 style="margin-bottom:var(--sp-2);">3. Explore</h3>
+          <p class="text-muted">Enjoy your curated local experience. Share a review to help future travellers.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══ CTA strip ════════════════════════════════════════ -->
+    <section
+      class="section"
+      style="background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary)); border-radius: var(--radius-xl); padding: var(--sp-12) var(--sp-8); text-align:center; color:white;"
+      aria-labelledby="cta-heading"
+    >
+      <h2 id="cta-heading" style="color:white; margin-bottom:var(--sp-4);">Are You a Local Tour Provider?</h2>
+      <p style="color:rgba(255,255,255,.85); margin-bottom:var(--sp-6); max-width:500px; margin-inline:auto;">
+        List your packages on MakeMyTour, manage bookings and grow your local tourism business.
+      </p>
+      <div style="display:flex; gap:var(--sp-4); justify-content:center; flex-wrap:wrap;">
+        <a href="/register.html" class="btn btn-accent btn-lg" id="cta-register-btn">Register as Provider</a>
+        <a href="/packages.html" class="btn btn-secondary btn-lg" style="color:white; border-color:rgba(255,255,255,.6);" id="cta-browse-btn">Browse Packages</a>
+      </div>
+    </section>
+
   </main>
+
+  <!-- Footer filled by layout.js -->
   <footer id="site-footer"></footer>
-  <!-- Foundation JS files (built by M2) will be added here -->
+
+  <!-- Foundation scripts (M2, frozen Day 1) — order matters -->
+  <script src="/js/api.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+
+  <!-- Page-specific script -->
+  <script src="/js/pages/home.js"></script>
+
 </body>
 </html>
