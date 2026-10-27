@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browse Packages | MakeMyTour — Local Tourism Package Booking</title>
+  <meta name="description" content="Search and filter local tour packages by destination, category, price and duration. Compare packages from verified local providers on MakeMyTour.">
+
+  <!-- Shared stylesheet (M2, frozen Day 1) -->
+  <link rel="stylesheet" href="/css/style.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Header filled by layout.js -->
+  <header id="site-header"></header>
+
+  <main id="app" class="container">
+
+    <!-- ══ Page heading ════════════════════════════════════════ -->
+    <section class="section" aria-labelledby="packages-heading" style="margin-bottom:var(--sp-6);">
+      <h1 id="packages-heading">Browse Tour Packages</h1>
+      <p class="text-muted">Search and filter packages from verified local providers.</p>
+    </section>
+
+    <!-- ══ Search + filters ════════════════════════════════════ -->
+    <form id="pkg-filter-form" class="card" style="padding:var(--sp-5); margin-bottom:var(--sp-6);"
+          role="search" aria-label="Search and filter packages" novalidate>
+
+      <div class="search-bar" style="margin-bottom:var(--sp-4);">
+        <input id="pkg-search-input" class="search-bar-input" type="search" name="q"
+               placeholder="Search by package name, destination or category…"
+               autocomplete="off" aria-label="Search packages">
+        <button type="submit" class="btn btn-primary search-bar-btn" id="pkg-search-btn">Search</button>
+      </div>
+
+      <div class="filter-row">
+        <div class="field">
+          <label class="field-label" for="pkg-filter-destination">Destination</label>
+          <select id="pkg-filter-destination" class="field-select" name="destination_id">
+            <option value="">All destinations</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="pkg-filter-category">Category</label>
+          <select id="pkg-filter-category" class="field-select" name="category_id">
+            <option value="">All categories</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="pkg-filter-min-price">Min price (₹)</label>
+          <input id="pkg-filter-min-price" class="field-input" type="number" name="min_price" min="0" step="100" inputmode="numeric">
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="pkg-filter-max-price">Max price (₹)</label>
+          <input id="pkg-filter-max-price" class="field-input" type="number" name="max_price" min="0" step="100" inputmode="numeric">
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="pkg-filter-sort">Sort by</label>
+          <select id="pkg-filter-sort" class="field-select" name="sort">
+            <option value="">Default</option>
+            <option value="price_asc">Price: low to high</option>
+            <option value="price_desc">Price: high to low</option>
+            <option value="duration">Duration</option>
+            <option value="rating">Top rated</option>
+            <option value="newest">Newest</option>
+          </select>
+        </div>
+
+        <button type="button" class="btn btn-secondary" id="pkg-filter-reset">Clear filters</button>
+      </div>
+
+      <p id="pkg-filter-error" class="field-hint" style="color:var(--color-danger); margin-top:var(--sp-2);" role="alert" hidden></p>
+    </form>
+
+    <!-- ══ Results ═════════════════════════════════════════════ -->
+    <section class="section" aria-labelledby="results-heading">
+      <div class="section-head">
+        <h2 class="section-title" id="results-heading">Packages</h2>
+        <p id="pkg-result-count" class="text-muted" aria-live="polite"></p>
+      </div>
+
+      <!-- Populated by pages/packages.js via api.get('/api/packages', filters) -->
+      <div id="pkg-results" class="grid grid-3" aria-live="polite" aria-busy="false"></div>
+      <div id="pkg-pager"></div>
+    </section>
+
+  </main>
+
+  <!-- Footer filled by layout.js -->
+  <footer id="site-footer"></footer>
+
+  <!-- Foundation scripts (M2, frozen Day 1) — order matters -->
+  <script src="/js/api.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+
+  <!-- Page-specific script -->
+  <script src="/js/pages/packages.js"></script>
+
+</body>
+</html>
