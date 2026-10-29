@@ -144,3 +144,21 @@
 | TC-REV-01 seed conflict | The seed inserts review_id 1 for booking 7. REV-01 must clean up the seeded review first (`DELETE FROM reviews WHERE booking_id = 7;`) or use a fresh booking. See pre-condition in the table above. |
 | Concurrent booking (BOOK-08) | Requires `SELECT ... FOR UPDATE` inside a transaction; can only be tested once the booking route exists. |
 | CAN-05 cancellation window | Requires Settings API (`PUT /api/settings`) to adjust `cancellation_window_days`, which needs M1's server core and `settings.routes.js`. |
+
+## Day 2 — Offline Booking Rules Tests
+
+**Date:** [29.10.2026]
+
+**Environment:** Node.js test runner; no MySQL connection required.
+
+| Check | Result |
+|---|---|
+| Booking rules unit tests | PASS — included in 78 passing tests |
+| Existing smoke tests | PASS — included in 78 passing tests |
+| `git diff --check` | PASS |
+| Database seed execution | NOT RUN — MySQL setup not verified |
+| Booking API integration | PENDING — route implementation and database integration required |
+
+**Notes:** The offline tests cover booking amount calculation, cancellation eligibility, provider status transitions, availability seat status, and review eligibility. Passing unit tests do not establish that SQL seeds or booking APIs work against a live database.
+
+**Safety:** Do not run `npm run db:setup` until the team confirms a dedicated disposable development database and valid credentials.
