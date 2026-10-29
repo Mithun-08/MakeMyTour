@@ -610,3 +610,538 @@ test('me handler returns ctx.user without DB call', async () => {
   const result = await meRoute.handler(ctx);
   assert.deepEqual(result.data.user, fakeUser, 'me must return ctx.user as-is');
 });
+
+
+// ── profile.routes.js structural & unit tests ──────────────────────────────
+
+test('profile.routes.js requires without errors', () => {
+  assert.doesNotThrow(() => {
+    require('../server/routes/profile.routes');
+  }, 'profile.routes.js must load without throwing');
+});
+
+test('profile.routes.js exports an array of 3 routes', () => {
+  const routes = require('../server/routes/profile.routes');
+  assert.ok(Array.isArray(routes), 'must export an array');
+  assert.equal(routes.length, 3, 'must export exactly 3 route objects');
+});
+
+test('GET /api/profile requires all authenticated roles', () => {
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/profile');
+  assert.ok(route, 'GET /api/profile route must exist');
+  assert.equal(typeof route.handler, 'function');
+  assert.ok(Array.isArray(route.roles));
+  for (const role of ['CUSTOMER', 'PROVIDER', 'ADMIN', 'SUPER_ADMIN']) {
+    assert.ok(route.roles.includes(role), `GET /api/profile must allow ${role}`);
+  }
+});
+
+test('PUT /api/profile requires all authenticated roles', () => {
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/profile');
+  assert.ok(route, 'PUT /api/profile route must exist');
+  assert.equal(typeof route.handler, 'function');
+  assert.ok(Array.isArray(route.roles));
+  for (const role of ['CUSTOMER', 'PROVIDER', 'ADMIN', 'SUPER_ADMIN']) {
+    assert.ok(route.roles.includes(role), `PUT /api/profile must allow ${role}`);
+  }
+});
+
+test('PUT /api/profile/password requires all authenticated roles', () => {
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/profile/password');
+  assert.ok(route, 'PUT /api/profile/password route must exist');
+  assert.equal(typeof route.handler, 'function');
+  assert.ok(Array.isArray(route.roles));
+  for (const role of ['CUSTOMER', 'PROVIDER', 'ADMIN', 'SUPER_ADMIN']) {
+    assert.ok(route.roles.includes(role), `PUT /api/profile/password must allow ${role}`);
+  }
+});
+
+test('GET /api/profile returns user profile and formatted address', async () => {
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/profile');
+
+  const ctx = {
+    user: { user_id: 5, email: 'user5@test.com', permissions: [] },
+    db: {
+      query: async (sql, params) => {
+        if (sql.includes('FROM users')) {
+          return [{
+            user_id: 5, name: 'Meena Iyer', email: 'user5@test.com',
+            mobile: '9876543210', role: 'PROVIDER', status: 'ACTIVE'
+          }];
+        }
+        if (sql.includes('FROM addresses')) {
+          return [{
+            address_id: 12, user_id: 5, address_line: 'MG Road',
+            city: 'Madikeri', state: 'Karnataka', pincode: '571201'
+          }];
+        }
+        return [];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.ok(result.data && result.data.user, 'must return user');
+  assert.equal(result.data.user.user_id, 5);
+  assert.equal(result.data.user.name, 'Meena Iyer');
+  assert.equal(result.data.user.password, undefined, 'never expose password hash');
+  assert.ok(result.data.address, 'must return address');
+  assert.equal(result.data.address.address_id, 12);
+  assert.equal(result.data.address.city, 'Madikeri');
+});
+
+test('GET /api/profile returns address: null when user has no address row', async () => {
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/profile');
+
+  const ctx = {
+    user: { user_id: 7, email: 'anita@test.com', permissions: [] },
+    db: {
+      query: async (sql) => {
+        if (sql.includes('FROM users')) {
+          return [{
+            user_id: 7, name: 'Anita Sharma', email: 'anita@test.com',
+            mobile: '9876543211', role: 'CUSTOMER', status: 'ACTIVE'
+          }];
+        }
+        if (sql.includes('FROM addresses')) {
+          return []; // no address record
+        }
+        return [];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.ok(result.data && result.data.user);
+  assert.equal(result.data.address, null, 'address must be null when no record exists');
+});
+
+test('GET /api/profile throws 404 NOT_FOUND if user is missing in DB', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/profile');
+
+  const ctx = {
+    user: { user_id: 999, email: 'ghost@test.com', permissions: [] },
+    db: {
+      query: async () => [] // user not found
+    }
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => err instanceof HttpError && err.status === 404 && err.code === 'NOT_FOUND'
+  );
+});
+
+test('PUT /api/profile rejects missing required name/mobile with VALIDATION_ERROR', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/profile');
+
+  const ctx = {
+    user: { user_id: 7, email: 'anita@test.com' },
+    body: { address_line: 'Only address supplied' },
+    db: {}
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => {
+      assert.ok(err instanceof HttpError && err.code === 'VALIDATION_ERROR');
+      assert.ok(err.details && err.details.name, 'name error required');
+      assert.ok(err.details && err.details.mobile, 'mobile error required');
+      return true;
+    }
+  );
+});
+
+test('PUT /api/profile rejects invalid mobile format (not 10 digits)', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/profile');
+
+  const ctx = {
+    user: { user_id: 7, email: 'anita@test.com' },
+    body: { name: 'Anita', mobile: '123' },
+    db: {}
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => {
+      assert.ok(err instanceof HttpError && err.code === 'VALIDATION_ERROR');
+      assert.ok(err.details && err.details.mobile);
+      return true;
+    }
+  );
+});
+
+test('PUT /api/profile updates user and updates existing address within transaction', async () => {
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/profile');
+
+  const executedQueries = [];
+
+  const ctx = {
+    user: { user_id: 5, email: 'meena@test.com', permissions: [] },
+    body: {
+      name: 'Meena Updated',
+      mobile: '9876543299',
+      address_line: 'New Villa 42',
+      city: 'Coorg',
+      state: 'Karnataka',
+      pincode: '571202'
+    },
+    db: {
+      transaction: async (fn) => {
+        const tx = {
+          query: async (sql, params) => {
+            executedQueries.push({ sql, params });
+            if (sql.includes('SELECT address_id')) {
+              const hasUpdated = executedQueries.some(q => q.sql.includes('UPDATE addresses'));
+              if (hasUpdated) {
+                return [{
+                  address_id: 101, address_line: 'New Villa 42',
+                  city: 'Coorg', state: 'Karnataka', pincode: '571202'
+                }];
+              }
+              return [{
+                address_id: 101, address_line: 'Old Villa',
+                city: 'Madikeri', state: 'Karnataka', pincode: '571201'
+              }]; // existing address
+            }
+            if (sql.includes('SELECT user_id, name, email')) {
+              return [{
+                user_id: 5, name: 'Meena Updated', email: 'meena@test.com',
+                mobile: '9876543299', role: 'PROVIDER', status: 'ACTIVE'
+              }];
+            }
+            return { affectedRows: 1 };
+          }
+        };
+        return fn(tx);
+      },
+      query: async () => ({ insertId: 1, affectedRows: 1 })
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.message, 'Profile updated successfully');
+  assert.equal(result.data.user.name, 'Meena Updated');
+  assert.equal(result.data.address.city, 'Coorg');
+
+  const updateAddrQuery = executedQueries.find(q => q.sql.includes('UPDATE addresses'));
+  assert.ok(updateAddrQuery, 'must execute UPDATE on existing address');
+  assert.equal(updateAddrQuery.params[4], 101, 'must update address_id 101');
+});
+
+test('PUT /api/profile preserves existing address fields when omitted from request, but updates supplied ones', async () => {
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/profile');
+
+  let updateParams = null;
+  const initialAddress = {
+    address_id: 303,
+    address_line: '123 Tea Estate Road',
+    city: 'Munnar',
+    state: 'Kerala',
+    pincode: '685612'
+  };
+
+  // Case 1: Updating only name and mobile (omitting all address fields)
+  const ctx1 = {
+    user: { user_id: 4, email: 'ravi@test.com', permissions: [] },
+    body: {
+      name: 'Ravi Kumar Jr',
+      mobile: '9876500000'
+    },
+    db: {
+      transaction: async (fn) => {
+        const tx = {
+          query: async (sql, params) => {
+            if (sql.includes('SELECT address_id')) {
+              return [initialAddress];
+            }
+            if (sql.includes('UPDATE addresses')) {
+              updateParams = params;
+            }
+            if (sql.includes('SELECT user_id, name, email')) {
+              return [{
+                user_id: 4, name: 'Ravi Kumar Jr', email: 'ravi@test.com',
+                mobile: '9876500000', role: 'PROVIDER', status: 'ACTIVE'
+              }];
+            }
+            return { affectedRows: 1 };
+          }
+        };
+        return fn(tx);
+      },
+      query: async () => ({ insertId: 1, affectedRows: 1 })
+    }
+  };
+
+  const result1 = await route.handler(ctx1);
+  assert.equal(result1.data.user.name, 'Ravi Kumar Jr');
+  // Address fields must be preserved, NOT set to null
+  assert.deepEqual(updateParams, [
+    '123 Tea Estate Road',
+    'Munnar',
+    'Kerala',
+    '685612',
+    303
+  ], 'omitted address fields must preserve existing values in the UPDATE query');
+
+  // Case 2: Explicitly supplying a single address field (e.g. new pincode) preserves the others
+  let partialUpdateParams = null;
+  const ctx2 = {
+    user: { user_id: 4, email: 'ravi@test.com', permissions: [] },
+    body: {
+      name: 'Ravi Kumar Jr',
+      mobile: '9876500000',
+      pincode: '685999' // explicitly supplied
+    },
+    db: {
+      transaction: async (fn) => {
+        const tx = {
+          query: async (sql, params) => {
+            if (sql.includes('SELECT address_id')) {
+              return [initialAddress];
+            }
+            if (sql.includes('UPDATE addresses')) {
+              partialUpdateParams = params;
+            }
+            if (sql.includes('SELECT user_id, name, email')) {
+              return [{
+                user_id: 4, name: 'Ravi Kumar Jr', email: 'ravi@test.com',
+                mobile: '9876500000', role: 'PROVIDER', status: 'ACTIVE'
+              }];
+            }
+            return { affectedRows: 1 };
+          }
+        };
+        return fn(tx);
+      },
+      query: async () => ({ insertId: 1, affectedRows: 1 })
+    }
+  };
+
+  const result2 = await route.handler(ctx2);
+  assert.deepEqual(partialUpdateParams, [
+    '123 Tea Estate Road', // preserved
+    'Munnar',              // preserved
+    'Kerala',              // preserved
+    '685999',              // updated
+    303
+  ], 'explicitly supplied address field must update while others are preserved');
+});
+
+test('PUT /api/profile updates user and inserts new address when none existed', async () => {
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/profile');
+
+  const executedQueries = [];
+
+  const ctx = {
+    user: { user_id: 7, email: 'anita@test.com', permissions: [] },
+    body: {
+      name: 'Anita Sharma',
+      mobile: '9876543210',
+      city: 'Kochi',
+      state: 'Kerala'
+    },
+    db: {
+      transaction: async (fn) => {
+        const tx = {
+          query: async (sql, params) => {
+            executedQueries.push({ sql, params });
+            if (sql.includes('SELECT address_id')) {
+              const hasInserted = executedQueries.some(q => q.sql.includes('INSERT INTO addresses'));
+              if (hasInserted) {
+                return [{
+                  address_id: 202, address_line: null,
+                  city: 'Kochi', state: 'Kerala', pincode: null
+                }];
+              }
+              return []; // no existing address initially
+            }
+            if (sql.includes('SELECT user_id, name, email')) {
+              return [{
+                user_id: 7, name: 'Anita Sharma', email: 'anita@test.com',
+                mobile: '9876543210', role: 'CUSTOMER', status: 'ACTIVE'
+              }];
+            }
+            return { insertId: 202, affectedRows: 1 };
+          }
+        };
+        return fn(tx);
+      },
+      query: async () => ({ insertId: 1, affectedRows: 1 })
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.data.address.city, 'Kochi');
+
+  const insertAddrQuery = executedQueries.find(q => q.sql.includes('INSERT INTO addresses'));
+  assert.ok(insertAddrQuery, 'must execute INSERT INTO addresses');
+  assert.equal(insertAddrQuery.params[0], 7, 'user_id must match');
+});
+
+test('PUT /api/profile strips email, role, status tampering attempts', async () => {
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/profile');
+
+  let userUpdateParams = null;
+
+  const ctx = {
+    user: { user_id: 7, email: 'anita@test.com', permissions: [] },
+    body: {
+      name: 'Anita S',
+      mobile: '9876543210',
+      email: 'hacked@test.com', // attempted tamper
+      role: 'SUPER_ADMIN',      // attempted tamper
+      status: 'BLOCKED'         // attempted tamper
+    },
+    db: {
+      transaction: async (fn) => {
+        const tx = {
+          query: async (sql, params) => {
+            if (sql.includes('UPDATE users')) {
+              userUpdateParams = params;
+            }
+            if (sql.includes('SELECT address_id')) return [];
+            if (sql.includes('SELECT user_id, name')) {
+              return [{
+                user_id: 7, name: 'Anita S', email: 'anita@test.com',
+                mobile: '9876543210', role: 'CUSTOMER', status: 'ACTIVE'
+              }];
+            }
+            return { affectedRows: 1 };
+          }
+        };
+        return fn(tx);
+      },
+      query: async () => ({ insertId: 1, affectedRows: 1 })
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.data.user.email, 'anita@test.com');
+  assert.equal(result.data.user.role, 'CUSTOMER');
+  assert.deepEqual(userUpdateParams, ['Anita S', '9876543210', 7]);
+});
+
+test('PUT /api/profile/password rejects new_password shorter than 8 chars', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/profile/password');
+
+  const ctx = {
+    user: { user_id: 7, email: 'anita@test.com' },
+    body: { current_password: 'Password@123', new_password: 'short' },
+    db: {}
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => {
+      assert.ok(err instanceof HttpError && err.code === 'VALIDATION_ERROR');
+      assert.ok(err.details && err.details.new_password);
+      return true;
+    }
+  );
+});
+
+test('PUT /api/profile/password rejects missing current_password', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/profile/password');
+
+  const ctx = {
+    user: { user_id: 7, email: 'anita@test.com' },
+    body: { new_password: 'NewPassword@123' },
+    db: {}
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => {
+      assert.ok(err instanceof HttpError && err.code === 'VALIDATION_ERROR');
+      assert.ok(err.details && err.details.current_password);
+      return true;
+    }
+  );
+});
+
+test('PUT /api/profile/password returns 400 INVALID_CREDENTIALS for incorrect current password', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const { hashPassword } = require('../server/utils/password');
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/profile/password');
+
+  const storedHash = await hashPassword('CorrectPassword@123');
+
+  const ctx = {
+    user: { user_id: 7, email: 'anita@test.com' },
+    body: { current_password: 'WrongPassword@999', new_password: 'NewPassword@123' },
+    db: {
+      query: async (sql) => {
+        if (sql.includes('SELECT password FROM users')) {
+          return [{ password: storedHash }];
+        }
+        return [];
+      }
+    }
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => {
+      assert.ok(err instanceof HttpError, 'must be HttpError');
+      assert.equal(err.status, 400, 'must return status 400 to prevent login redirect loop');
+      assert.equal(err.code, 'INVALID_CREDENTIALS');
+      assert.equal(err.message, 'Current password is incorrect');
+      return true;
+    }
+  );
+});
+
+test('PUT /api/profile/password verifies current password and updates hash on match', async () => {
+  const { hashPassword, verifyPassword } = require('../server/utils/password');
+  const routes = require('../server/routes/profile.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/profile/password');
+
+  const storedHash = await hashPassword('CurrentPassword@123');
+  let updatedPasswordHash = null;
+
+  const ctx = {
+    user: { user_id: 7, email: 'anita@test.com' },
+    body: { current_password: 'CurrentPassword@123', new_password: 'BrandNewPassword@456' },
+    db: {
+      query: async (sql, params) => {
+        if (sql.includes('SELECT password FROM users')) {
+          return [{ password: storedHash }];
+        }
+        if (sql.includes('UPDATE users SET password = ?')) {
+          updatedPasswordHash = params[0];
+          return { affectedRows: 1 };
+        }
+        // logAction insert
+        return { insertId: 1, affectedRows: 1 };
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.message, 'Password updated successfully');
+  assert.equal(result.data, null);
+  assert.ok(updatedPasswordHash, 'password must have been updated in DB');
+  const verifiesNew = await verifyPassword('BrandNewPassword@456', updatedPasswordHash);
+  assert.ok(verifiesNew, 'stored hash must match new password');
+});
