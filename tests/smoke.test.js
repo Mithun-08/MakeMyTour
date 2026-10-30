@@ -1145,3 +1145,337 @@ test('PUT /api/profile/password verifies current password and updates hash on ma
   const verifiesNew = await verifyPassword('BrandNewPassword@456', updatedPasswordHash);
   assert.ok(verifiesNew, 'stored hash must match new password');
 });
+
+
+// ── adminUsers.routes.js structural & unit tests ───────────────────────────
+
+test('adminUsers.routes.js requires without errors', () => {
+  assert.doesNotThrow(() => {
+    require('../server/routes/adminUsers.routes');
+  }, 'adminUsers.routes.js must load without throwing');
+});
+
+test('adminUsers.routes.js exports an array of 3 routes', () => {
+  const routes = require('../server/routes/adminUsers.routes');
+  assert.ok(Array.isArray(routes), 'must export an array');
+  assert.equal(routes.length, 3, 'must export exactly 3 route objects');
+});
+
+test('GET /api/admin/customers requires ADMIN and MANAGE_USERS permission', () => {
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/admin/customers');
+  assert.ok(route, 'GET /api/admin/customers must exist');
+  assert.deepEqual(route.roles, ['ADMIN']);
+  assert.equal(route.permission, 'MANAGE_USERS');
+  assert.equal(typeof route.handler, 'function');
+});
+
+test('GET /api/admin/providers requires ADMIN and MANAGE_PROVIDERS permission', () => {
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/admin/providers');
+  assert.ok(route, 'GET /api/admin/providers must exist');
+  assert.deepEqual(route.roles, ['ADMIN']);
+  assert.equal(route.permission, 'MANAGE_PROVIDERS');
+  assert.equal(typeof route.handler, 'function');
+});
+
+test('PATCH /api/admin/users/:id/status requires ADMIN role', () => {
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'PATCH' && r.path === '/api/admin/users/:id/status');
+  assert.ok(route, 'PATCH /api/admin/users/:id/status must exist');
+  assert.deepEqual(route.roles, ['ADMIN']);
+  assert.equal(typeof route.handler, 'function');
+});
+
+test('GET /api/admin/customers returns paginated customer rows with total_bookings', async () => {
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/admin/customers');
+
+  const ctx = {
+    query: { page: '1', pageSize: '10' },
+    db: {
+      query: async (sql) => {
+        if (sql.includes('SELECT COUNT(*) AS total FROM users')) {
+          return [{ total: 2 }];
+        }
+        return [
+          {
+            user_id: 7, name: 'Anita Sharma', email: 'anita@test.com',
+            mobile: '9876543210', status: 'ACTIVE', created_at: new Date('2026-10-25T10:00:00Z'),
+            total_bookings: 3
+          },
+          {
+            user_id: 8, name: 'Karthik R', email: 'karthik@test.com',
+            mobile: '9876543211', status: 'ACTIVE', created_at: new Date('2026-10-25T10:05:00Z'),
+            total_bookings: 0
+          }
+        ];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.ok(Array.isArray(result.data));
+  assert.equal(result.data.length, 2);
+  assert.equal(result.meta.total, 2);
+  assert.equal(result.meta.page, 1);
+  assert.equal(result.meta.pageSize, 10);
+  assert.equal(result.data[0].total_bookings, 3);
+  assert.equal(result.data[0].password, undefined, 'never expose password hash');
+});
+
+test('GET /api/admin/customers applies search and status filters to SQL query parameters', async () => {
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/admin/customers');
+
+  let countParams = null;
+  let dataParams = null;
+
+  const ctx = {
+    query: { search: 'Anita', status: 'active', page: '2', pageSize: '5' },
+    db: {
+      query: async (sql, params) => {
+        if (sql.includes('SELECT COUNT(*) AS total FROM users')) {
+          countParams = params;
+          return [{ total: 1 }];
+        }
+        dataParams = params;
+        return [{
+          user_id: 7, name: 'Anita Sharma', email: 'anita@test.com',
+          mobile: '9876543210', status: 'ACTIVE', created_at: '2026-10-25T10:00:00Z',
+          total_bookings: 3
+        }];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.meta.page, 2);
+  assert.equal(result.meta.pageSize, 5);
+  // Status filter normalized to upper-case
+  assert.ok(countParams.includes('ACTIVE'));
+  assert.ok(countParams.includes('%Anita%'));
+  // Data query includes limit and offset at the end
+  assert.equal(dataParams[dataParams.length - 2], 5, 'limit is pageSize 5');
+  assert.equal(dataParams[dataParams.length - 1], 5, 'offset is (2-1)*5 = 5');
+});
+
+test('GET /api/admin/providers returns paginated provider rows with package_count, city, state', async () => {
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/admin/providers');
+
+  const ctx = {
+    query: { page: '1', pageSize: '10' },
+    db: {
+      query: async (sql) => {
+        if (sql.includes('SELECT COUNT(*) AS total FROM users')) {
+          return [{ total: 1 }];
+        }
+        return [{
+          user_id: 4, name: 'Ravi Kumar', email: 'ravi@test.com',
+          mobile: '9876500000', status: 'ACTIVE', created_at: new Date('2026-10-25T10:00:00Z'),
+          package_count: 5, city: 'Munnar', state: 'Kerala'
+        }];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.ok(Array.isArray(result.data));
+  assert.equal(result.data.length, 1);
+  assert.equal(result.data[0].package_count, 5);
+  assert.equal(result.data[0].city, 'Munnar');
+  assert.equal(result.data[0].state, 'Kerala');
+  assert.equal(result.data[0].password, undefined, 'never expose password hash');
+});
+
+test('PATCH /api/admin/users/:id/status rejects invalid target ID with 400 BAD_REQUEST', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'PATCH' && r.path === '/api/admin/users/:id/status');
+
+  const ctx = {
+    params: { id: 'abc' },
+    body: { status: 'ACTIVE' },
+    user: { role: 'SUPER_ADMIN' },
+    db: {}
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => err instanceof HttpError && err.status === 400 && err.code === 'BAD_REQUEST'
+  );
+});
+
+test('PATCH /api/admin/users/:id/status rejects invalid status enum with 400 VALIDATION_ERROR', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'PATCH' && r.path === '/api/admin/users/:id/status');
+
+  const ctx = {
+    params: { id: '6' },
+    body: { status: 'UNKNOWN_STATUS' },
+    user: { role: 'SUPER_ADMIN' },
+    db: {}
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => {
+      assert.ok(err instanceof HttpError && err.code === 'VALIDATION_ERROR');
+      assert.ok(err.details && err.details.status);
+      return true;
+    }
+  );
+});
+
+test('PATCH /api/admin/users/:id/status throws 404 NOT_FOUND for non-existent user', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'PATCH' && r.path === '/api/admin/users/:id/status');
+
+  const ctx = {
+    params: { id: '999' },
+    body: { status: 'ACTIVE' },
+    user: { role: 'SUPER_ADMIN' },
+    db: {
+      query: async () => [] // no user found
+    }
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => err instanceof HttpError && err.status === 404 && err.code === 'NOT_FOUND'
+  );
+});
+
+test('PATCH /api/admin/users/:id/status rejects modification of ADMIN or SUPER_ADMIN with 403 FORBIDDEN', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'PATCH' && r.path === '/api/admin/users/:id/status');
+
+  const ctx = {
+    params: { id: '2' },
+    body: { status: 'BLOCKED' },
+    user: { role: 'SUPER_ADMIN' },
+    db: {
+      query: async () => [{ user_id: 2, name: 'Admin', email: 'admin@test.com', role: 'ADMIN', status: 'ACTIVE' }]
+    }
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => err instanceof HttpError && err.status === 403 && err.code === 'FORBIDDEN'
+  );
+});
+
+test('PATCH /api/admin/users/:id/status checks MANAGE_USERS when target is CUSTOMER', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'PATCH' && r.path === '/api/admin/users/:id/status');
+
+  // Caller is ADMIN but lacks MANAGE_USERS (only has MANAGE_DESTINATIONS)
+  const ctx = {
+    params: { id: '7' },
+    body: { status: 'BLOCKED' },
+    user: { role: 'ADMIN', permissions: ['MANAGE_DESTINATIONS'] },
+    db: {
+      query: async () => [{ user_id: 7, name: 'Customer', email: 'c@test.com', role: 'CUSTOMER', status: 'ACTIVE' }]
+    }
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => err instanceof HttpError && err.status === 403 && err.message.includes('MANAGE_USERS')
+  );
+});
+
+test('PATCH /api/admin/users/:id/status checks MANAGE_PROVIDERS when target is PROVIDER', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'PATCH' && r.path === '/api/admin/users/:id/status');
+
+  // Caller is ADMIN with MANAGE_USERS only (lacks MANAGE_PROVIDERS)
+  const ctx = {
+    params: { id: '6' },
+    body: { status: 'ACTIVE' },
+    user: { role: 'ADMIN', permissions: ['MANAGE_USERS'] },
+    db: {
+      query: async () => [{ user_id: 6, name: 'Provider', email: 'p@test.com', role: 'PROVIDER', status: 'PENDING' }]
+    }
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => err instanceof HttpError && err.status === 403 && err.message.includes('MANAGE_PROVIDERS')
+  );
+});
+
+test('PATCH /api/admin/users/:id/status allows valid transitions and updates DB', async () => {
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'PATCH' && r.path === '/api/admin/users/:id/status');
+
+  const transitionsToTest = [
+    { from: 'PENDING', to: 'ACTIVE',   role: 'PROVIDER' }, // Approve
+    { from: 'PENDING', to: 'REJECTED', role: 'PROVIDER' }, // Reject
+    { from: 'ACTIVE',  to: 'BLOCKED',  role: 'CUSTOMER' }, // Block
+    { from: 'BLOCKED', to: 'ACTIVE',   role: 'CUSTOMER' }  // Unblock
+  ];
+
+  for (const t of transitionsToTest) {
+    let updatedStatusParam = null;
+    const ctx = {
+      params: { id: '10' },
+      body: { status: t.to },
+      user: { role: 'SUPER_ADMIN' },
+      db: {
+        query: async (sql, params) => {
+          if (sql.includes('SELECT user_id, name')) {
+            return [{ user_id: 10, name: 'User 10', email: 'u10@test.com', role: t.role, status: t.from }];
+          }
+          if (sql.includes('UPDATE users SET status = ?')) {
+            updatedStatusParam = params[0];
+            return { affectedRows: 1 };
+          }
+          // logAction insert
+          return { insertId: 1, affectedRows: 1 };
+        }
+      }
+    };
+
+    const result = await route.handler(ctx);
+    assert.equal(result.data.status, t.to);
+    assert.equal(result.data.previous_status, t.from);
+    assert.equal(updatedStatusParam, t.to);
+  }
+});
+
+test('PATCH /api/admin/users/:id/status rejects invalid transitions with 409 CONFLICT', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/adminUsers.routes');
+  const route = routes.find(r => r.method === 'PATCH' && r.path === '/api/admin/users/:id/status');
+
+  const invalidTransitions = [
+    { from: 'ACTIVE',   to: 'ACTIVE' },   // No-op / illegal
+    { from: 'PENDING',  to: 'BLOCKED' },  // Cannot block directly from pending
+    { from: 'REJECTED', to: 'ACTIVE' },   // Rejected is terminal per contract table
+    { from: 'BLOCKED',  to: 'REJECTED' }  // Blocked can only be unblocked to ACTIVE
+  ];
+
+  for (const t of invalidTransitions) {
+    const ctx = {
+      params: { id: '11' },
+      body: { status: t.to },
+      user: { role: 'SUPER_ADMIN' },
+      db: {
+        query: async () => [{ user_id: 11, name: 'User 11', email: 'u11@test.com', role: 'PROVIDER', status: t.from }]
+      }
+    };
+
+    await assert.rejects(
+      () => route.handler(ctx),
+      (err) => err instanceof HttpError && err.status === 409 && err.code === 'CONFLICT',
+      `Transition ${t.from} -> ${t.to} must be rejected with 409`
+    );
+  }
+});
