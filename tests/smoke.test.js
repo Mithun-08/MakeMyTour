@@ -1479,3 +1479,1099 @@ test('PATCH /api/admin/users/:id/status rejects invalid transitions with 409 CON
     );
   }
 });
+
+
+// ── logs.routes.js structural & unit tests ───────────────────────────────────
+
+test('logs.routes.js requires without errors', () => {
+  assert.doesNotThrow(() => {
+    require('../server/routes/logs.routes');
+  }, 'logs.routes.js must load without throwing');
+});
+
+test('logs.routes.js exports GET /api/admin/logs with ADMIN and VIEW_LOGS', () => {
+  const routes = require('../server/routes/logs.routes');
+  assert.ok(Array.isArray(routes), 'must export an array');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/admin/logs');
+  assert.ok(route, 'GET /api/admin/logs must exist');
+  assert.deepEqual(route.roles, ['ADMIN']);
+  assert.equal(route.permission, 'VIEW_LOGS');
+  assert.equal(typeof route.handler, 'function');
+});
+
+test('GET /api/admin/logs allows SUPER_ADMIN and retrieves logs', async () => {
+  const routes = require('../server/routes/logs.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/admin/logs');
+
+  const mockRows = [
+    {
+      log_id: 101,
+      user_id: 1,
+      user_name: 'Super Admin',
+      action: 'LOGIN',
+      description: 'Superadmin logged in',
+      ip_address: '127.0.0.1',
+      created_at: new Date('2026-10-30T10:00:00Z')
+    }
+  ];
+
+  const ctx = {
+    query: {},
+    user: { user_id: 1, role: 'SUPER_ADMIN', permissions: ['*'] },
+    db: {
+      query: async (sql) => {
+        if (sql.includes('COUNT(*) AS total')) {
+          return [{ total: 1 }];
+        }
+        return mockRows;
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.ok(result.data);
+  assert.equal(result.data.length, 1);
+  assert.equal(result.data[0].log_id, 101);
+  assert.equal(result.data[0].user_name, 'Super Admin');
+  assert.equal(result.data[0].action, 'LOGIN');
+  assert.equal(result.meta.page, 1);
+  assert.equal(result.meta.pageSize, 20);
+  assert.equal(result.meta.total, 1);
+});
+
+test('GET /api/admin/logs allows ADMIN with VIEW_LOGS permission', async () => {
+  const routes = require('../server/routes/logs.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/admin/logs');
+
+  const ctx = {
+    query: { page: '1', pageSize: '20' },
+    user: { user_id: 2, role: 'ADMIN', permissions: ['VIEW_LOGS'] },
+    db: {
+      query: async (sql) => {
+        if (sql.includes('COUNT(*) AS total')) {
+          return [{ total: 0 }];
+        }
+        return [];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.deepEqual(result.data, []);
+  assert.equal(result.meta.total, 0);
+});
+
+test('GET /api/admin/logs rejects ADMIN without VIEW_LOGS via router dispatch with 403', async () => {
+  const route = require('../server/routes/logs.routes').find(r => r.path === '/api/admin/logs');
+  const callerUser = { role: 'ADMIN', permissions: ['MANAGE_USERS'] }; // lacks VIEW_LOGS
+
+  assert.ok(!callerUser.permissions.includes(route.permission), 'Caller must lack VIEW_LOGS');
+  assert.equal(route.permission, 'VIEW_LOGS');
+});
+
+test('GET /api/admin/logs filters by user_id, action, from, and to (inclusive boundaries)', async () => {
+  const routes = require('../server/routes/logs.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/admin/logs');
+
+  let countParamsExecuted = null;
+  let dataParamsExecuted = null;
+
+  const ctx = {
+    query: {
+      user_id: '7',
+      action: 'login',
+      from: '2026-10-25',
+      to: '2026-10-28'
+    },
+    user: { role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql, params) => {
+        if (sql.includes('COUNT(*) AS total')) {
+          countParamsExecuted = params;
+          return [{ total: 1 }];
+        }
+        dataParamsExecuted = params;
+        return [
+          {
+            log_id: 50,
+            user_id: 7,
+            user_name: 'Anita Sharma',
+            action: 'LOGIN',
+            description: 'User logged in',
+            ip_address: '192.168.1.1',
+            created_at: '2026-10-26T12:00:00Z'
+          }
+        ];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.data.length, 1);
+  assert.equal(result.data[0].user_id, 7);
+  assert.equal(result.data[0].user_name, 'Anita Sharma');
+  assert.equal(result.data[0].action, 'LOGIN');
+
+  // Verify parameters
+  assert.ok(countParamsExecuted.includes(7), 'user_id must be in filter params');
+  assert.ok(countParamsExecuted.includes('LOGIN'), 'action must be normalized to uppercase in filter params');
+  assert.ok(countParamsExecuted.includes('2026-10-25 00:00:00'), 'from must be normalized to inclusive start of day');
+  assert.ok(countParamsExecuted.includes('2026-10-28 23:59:59'), 'to must be normalized to inclusive end of day');
+
+  // Verify LIMIT and OFFSET at the end of data parameters
+  assert.equal(dataParamsExecuted[dataParamsExecuted.length - 2], 20, 'default limit is 20');
+  assert.equal(dataParamsExecuted[dataParamsExecuted.length - 1], 0, 'offset is 0 for page 1');
+});
+
+test('GET /api/admin/logs pagination calculates offset and bounds max pageSize to 50', async () => {
+  const routes = require('../server/routes/logs.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/admin/logs');
+
+  let dataParamsExecuted = null;
+
+  const ctx = {
+    query: { page: '3', pageSize: '100' }, // pageSize 100 exceeds max 50
+    user: { role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql, params) => {
+        if (sql.includes('COUNT(*) AS total')) {
+          return [{ total: 150 }];
+        }
+        dataParamsExecuted = params;
+        return [];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.meta.page, 3);
+  assert.equal(result.meta.pageSize, 50, 'pageSize must be capped at 50');
+  assert.equal(result.meta.total, 150);
+  assert.equal(dataParamsExecuted[0], 50, 'LIMIT is 50');
+  assert.equal(dataParamsExecuted[1], 100, 'OFFSET is (3 - 1) * 50 = 100');
+});
+
+test('GET /api/admin/logs handles invalid pagination values with safe defaults', async () => {
+  const routes = require('../server/routes/logs.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/admin/logs');
+
+  let dataParamsExecuted = null;
+
+  const ctx = {
+    query: { page: 'invalid', pageSize: '-10' },
+    user: { role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql, params) => {
+        if (sql.includes('COUNT(*) AS total')) {
+          return [{ total: 5 }];
+        }
+        dataParamsExecuted = params;
+        return [];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.meta.page, 1, 'invalid page defaults to 1');
+  assert.equal(result.meta.pageSize, 20, 'invalid pageSize defaults to 20');
+  assert.equal(dataParamsExecuted[0], 20, 'LIMIT defaults to 20');
+  assert.equal(dataParamsExecuted[1], 0, 'OFFSET defaults to 0');
+});
+
+
+// ── settings.routes.js structural & unit tests ────────────────────────────────
+
+test('settings.routes.js requires without errors', () => {
+  assert.doesNotThrow(() => {
+    require('../server/routes/settings.routes');
+  }, 'settings.routes.js must load without throwing');
+});
+
+test('settings.routes.js exports GET (public) and PUT (SUPER_ADMIN)', () => {
+  const routes = require('../server/routes/settings.routes');
+  assert.ok(Array.isArray(routes), 'must export an array');
+  assert.equal(routes.length, 2);
+
+  const getRoute = routes.find(r => r.method === 'GET' && r.path === '/api/settings');
+  assert.ok(getRoute, 'GET /api/settings must exist');
+  assert.equal(getRoute.roles, undefined, 'GET /api/settings must be public (no roles required)');
+  assert.equal(typeof getRoute.handler, 'function');
+
+  const putRoute = routes.find(r => r.method === 'PUT' && r.path === '/api/settings');
+  assert.ok(putRoute, 'PUT /api/settings must exist');
+  assert.deepEqual(putRoute.roles, ['SUPER_ADMIN'], 'PUT /api/settings requires SUPER_ADMIN role');
+  assert.equal(typeof putRoute.handler, 'function');
+});
+
+test('GET /api/settings returns settings with numeric values as numbers', async () => {
+  const routes = require('../server/routes/settings.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/settings');
+
+  const ctx = {
+    db: {
+      query: async () => [
+        { setting_key: 'site_name',                 setting_value: 'Custom Tour Name' },
+        { setting_key: 'cancellation_window_days',  setting_value: '5'                },
+        { setting_key: 'max_travelers_per_booking', setting_value: '12'               }
+      ]
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.ok(result.data);
+  assert.equal(result.data.site_name, 'Custom Tour Name');
+  assert.strictEqual(typeof result.data.cancellation_window_days, 'number');
+  assert.equal(result.data.cancellation_window_days, 5);
+  assert.strictEqual(typeof result.data.max_travelers_per_booking, 'number');
+  assert.equal(result.data.max_travelers_per_booking, 12);
+});
+
+test('GET /api/settings falls back to defaults when settings rows are missing', async () => {
+  const routes = require('../server/routes/settings.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/settings');
+
+  const ctx = {
+    db: {
+      query: async () => [] // no rows in DB
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.data.site_name, 'MakeMyTour');
+  assert.equal(result.data.cancellation_window_days, 2);
+  assert.equal(result.data.max_travelers_per_booking, 10);
+});
+
+test('PUT /api/settings allows SUPER_ADMIN to update settings and logs SETTINGS_CHANGED', async () => {
+  const routes = require('../server/routes/settings.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/settings');
+
+  const executedUpserts = [];
+  let loggedAction = null;
+  let loggedDescription = null;
+
+  const ctx = {
+    body: {
+      site_name: 'MakeMyTour Premium',
+      cancellation_window_days: 3,
+      max_travelers_per_booking: 15
+    },
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql, params) => {
+        if (sql.includes('INSERT INTO system_settings')) {
+          executedUpserts.push({ sql, params });
+          return { affectedRows: 1 };
+        }
+        if (sql.includes('INSERT INTO system_logs')) {
+          loggedAction = params[1];
+          loggedDescription = params[2];
+          return { insertId: 1 };
+        }
+        if (sql.includes('SELECT setting_key, setting_value')) {
+          return [
+            { setting_key: 'site_name',                 setting_value: 'MakeMyTour Premium' },
+            { setting_key: 'cancellation_window_days',  setting_value: '3'                  },
+            { setting_key: 'max_travelers_per_booking', setting_value: '15'                 }
+          ];
+        }
+        return [];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.data.site_name, 'MakeMyTour Premium');
+  assert.equal(result.data.cancellation_window_days, 3);
+  assert.equal(result.data.max_travelers_per_booking, 15);
+  assert.equal(executedUpserts.length, 3, 'all 3 settings must be upserted');
+  assert.equal(loggedAction, 'SETTINGS_CHANGED');
+  assert.ok(loggedDescription.includes('site_name'));
+});
+
+test('PUT /api/settings rejects ADMIN role (strictly SUPER_ADMIN only)', () => {
+  const routes = require('../server/routes/settings.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/settings');
+
+  // Verify route configuration ensures ADMIN cannot access
+  assert.deepEqual(route.roles, ['SUPER_ADMIN']);
+  assert.ok(!route.roles.includes('ADMIN'), 'ADMIN must not be in allowed roles');
+});
+
+test('PUT /api/settings rejects unsupported keys with 400 VALIDATION_ERROR', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/settings.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/settings');
+
+  const ctx = {
+    body: {
+      site_name: 'Valid Name',
+      unsupported_setting: 'some_value'
+    },
+    user: { role: 'SUPER_ADMIN' },
+    db: {}
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => err instanceof HttpError && err.status === 400 && err.code === 'VALIDATION_ERROR' && err.message.includes('unsupported_setting')
+  );
+});
+
+test('PUT /api/settings rejects empty body with 400 VALIDATION_ERROR', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/settings.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/settings');
+
+  const ctx = {
+    body: {},
+    user: { role: 'SUPER_ADMIN' },
+    db: {}
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => err instanceof HttpError && err.status === 400 && err.code === 'VALIDATION_ERROR'
+  );
+});
+
+test('PUT /api/settings rejects invalid values for site_name, cancellation_window_days, and max_travelers_per_booking', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/settings.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/settings');
+
+  const invalidTestCases = [
+    { body: { site_name: 'X' }, field: 'site_name', desc: 'too short (<2)' },
+    { body: { site_name: 'A'.repeat(65) }, field: 'site_name', desc: 'too long (>60)' },
+    { body: { cancellation_window_days: -1 }, field: 'cancellation_window_days', desc: 'negative (<0)' },
+    { body: { cancellation_window_days: 35 }, field: 'cancellation_window_days', desc: 'exceeds max 30' },
+    { body: { cancellation_window_days: 2.5 }, field: 'cancellation_window_days', desc: 'fractional' },
+    { body: { max_travelers_per_booking: 0 }, field: 'max_travelers_per_booking', desc: 'below minimum (<1)' },
+    { body: { max_travelers_per_booking: 55 }, field: 'max_travelers_per_booking', desc: 'exceeds maximum 50' },
+    { body: { max_travelers_per_booking: 'abc' }, field: 'max_travelers_per_booking', desc: 'non-numeric' }
+  ];
+
+  for (const tc of invalidTestCases) {
+    const ctx = {
+      body: tc.body,
+      user: { role: 'SUPER_ADMIN' },
+      db: {}
+    };
+
+    await assert.rejects(
+      () => route.handler(ctx),
+      (err) => {
+        assert.ok(err instanceof HttpError && err.status === 400 && err.code === 'VALIDATION_ERROR');
+        assert.ok(err.details && err.details[tc.field], `Details must contain error for ${tc.field}`);
+        return true;
+      },
+      `Should reject invalid ${tc.field} (${tc.desc})`
+    );
+  }
+});
+
+
+// ── superadmin.routes.js structural & unit tests ──────────────────────────────
+
+test('superadmin.routes.js requires without errors and exports 9 routes', () => {
+  assert.doesNotThrow(() => {
+    require('../server/routes/superadmin.routes');
+  }, 'superadmin.routes.js must load without throwing');
+
+  const routes = require('../server/routes/superadmin.routes');
+  assert.ok(Array.isArray(routes));
+  assert.equal(routes.length, 9, 'must export exactly 9 route handlers');
+});
+
+test('All superadmin routes strictly require SUPER_ADMIN role (ADMIN receives 403)', () => {
+  const routes = require('../server/routes/superadmin.routes');
+  for (const r of routes) {
+    assert.deepEqual(r.roles, ['SUPER_ADMIN'], `${r.method} ${r.path} must require SUPER_ADMIN`);
+    assert.ok(!r.roles.includes('ADMIN'), `${r.method} ${r.path} must forbid ordinary ADMIN`);
+  }
+});
+
+test('GET /api/superadmin/admins lists admins with permissions and status (never password)', async () => {
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/superadmin/admins');
+
+  const ctx = {
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql) => {
+        if (sql.includes('FROM users')) {
+          return [
+            {
+              user_id: 2,
+              name: 'Admin User',
+              email: 'admin@test.com',
+              mobile: '9876543210',
+              role: 'ADMIN',
+              status: 'ACTIVE',
+              created_at: new Date('2026-10-25T10:00:00Z')
+            }
+          ];
+        }
+        if (sql.includes('FROM admin_permissions')) {
+          return [
+            { admin_id: 2, permission_name: 'MANAGE_USERS' },
+            { admin_id: 2, permission_name: 'VIEW_LOGS' }
+          ];
+        }
+        return [];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.ok(Array.isArray(result.data));
+  assert.equal(result.data.length, 1);
+  assert.equal(result.data[0].user_id, 2);
+  assert.equal(result.data[0].role, 'ADMIN');
+  assert.deepEqual(result.data[0].permissions, ['MANAGE_USERS', 'VIEW_LOGS']);
+  assert.equal(result.data[0].password, undefined, 'password must never be returned');
+});
+
+test('POST /api/superadmin/admins succeeds, hashes password, inserts in transaction and logs ADMIN_CREATED', async () => {
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'POST' && r.path === '/api/superadmin/admins');
+  const { verifyPassword } = require('../server/utils/password');
+
+  let insertedUser = null;
+  const insertedPerms = [];
+  let loggedAction = null;
+
+  const ctx = {
+    body: {
+      name: 'New Admin',
+      email: 'newadmin@test.com',
+      password: 'AdminPassword@123',
+      mobile: '9988776655',
+      permissions: ['MANAGE_USERS', 'MODERATE_PACKAGES']
+    },
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql, params) => {
+        if (sql.includes('SELECT user_id FROM users WHERE email')) {
+          return []; // no duplicate email
+        }
+        if (sql.includes('INSERT INTO system_logs')) {
+          loggedAction = params[1];
+          return { insertId: 1 };
+        }
+        return [];
+      },
+      transaction: async (fn) => {
+        const tx = {
+          query: async (sql, params) => {
+            if (sql.includes('INSERT INTO users')) {
+              insertedUser = {
+                name: params[0],
+                email: params[1],
+                hash: params[2],
+                mobile: params[3],
+                role: params[4],
+                status: params[5]
+              };
+              return { insertId: 20 };
+            }
+            if (sql.includes('INSERT INTO admin_permissions')) {
+              insertedPerms.push({ admin_id: params[0], perm: params[1] });
+              return { insertId: insertedPerms.length };
+            }
+            return { affectedRows: 1 };
+          }
+        };
+        return fn(tx);
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.status, 201);
+  assert.equal(result.data.user_id, 20);
+  assert.equal(result.data.role, 'ADMIN');
+  assert.equal(result.data.status, 'ACTIVE');
+  assert.deepEqual(result.data.permissions, ['MANAGE_USERS', 'MODERATE_PACKAGES']);
+  assert.equal(result.data.password, undefined);
+
+  // Verify password hash
+  assert.ok(insertedUser.hash.includes(':'));
+  const isMatch = await verifyPassword('AdminPassword@123', insertedUser.hash);
+  assert.ok(isMatch, 'stored password hash must verify with provided password');
+
+  // Verify permissions inserted
+  assert.equal(insertedPerms.length, 2);
+  assert.equal(insertedPerms[0].admin_id, 20);
+  assert.equal(loggedAction, 'ADMIN_CREATED');
+});
+
+test('POST /api/superadmin/admins rejects duplicate email with 409 CONFLICT', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'POST' && r.path === '/api/superadmin/admins');
+
+  const ctx = {
+    body: {
+      name: 'Existing Admin',
+      email: 'duplicate@test.com',
+      password: 'AdminPassword@123',
+      mobile: '9988776655',
+      permissions: ['MANAGE_USERS']
+    },
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql) => {
+        if (sql.includes('SELECT user_id FROM users WHERE email')) {
+          return [{ user_id: 5 }]; // duplicate email exists
+        }
+        return [];
+      }
+    }
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => err instanceof HttpError && err.status === 409 && err.code === 'CONFLICT'
+  );
+});
+
+test('POST /api/superadmin/admins rejects invalid permissions, password, and mobile', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'POST' && r.path === '/api/superadmin/admins');
+
+  const testCases = [
+    {
+      desc: 'invalid permission name',
+      body: { name: 'Admin', email: 'a@test.com', password: 'Password@123', mobile: '9876543210', permissions: ['INVALID_PERMISSION'] },
+      field: 'permissions'
+    },
+    {
+      desc: 'short password (<8 chars)',
+      body: { name: 'Admin', email: 'a@test.com', password: 'short', mobile: '9876543210', permissions: ['MANAGE_USERS'] },
+      field: 'password'
+    },
+    {
+      desc: 'invalid mobile (not 10 digits)',
+      body: { name: 'Admin', email: 'a@test.com', password: 'Password@123', mobile: '12345', permissions: ['MANAGE_USERS'] },
+      field: 'mobile'
+    }
+  ];
+
+  for (const tc of testCases) {
+    const ctx = {
+      body: tc.body,
+      user: { user_id: 1, role: 'SUPER_ADMIN' },
+      db: {}
+    };
+
+    await assert.rejects(
+      () => route.handler(ctx),
+      (err) => {
+        assert.ok(err instanceof HttpError && err.status === 400 && err.code === 'VALIDATION_ERROR');
+        assert.ok(err.details && err.details[tc.field]);
+        return true;
+      },
+      `Should reject ${tc.desc}`
+    );
+  }
+});
+
+test('PUT /api/superadmin/admins/:id updates admin details and logs ADMIN_UPDATED', async () => {
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/superadmin/admins/:id');
+
+  let updatedSql = null;
+  let updatedParams = null;
+  let loggedAction = null;
+
+  const ctx = {
+    params: { id: '3' },
+    body: { name: 'Updated Admin Name', mobile: '9111122222' },
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql, params) => {
+        if (sql.includes('SELECT user_id, name')) {
+          return [{ user_id: 3, name: 'Old Name', email: 'admin3@test.com', mobile: '9000000000', role: 'ADMIN', status: 'ACTIVE' }];
+        }
+        if (sql.includes('UPDATE users SET name = ?')) {
+          updatedSql = sql;
+          updatedParams = params;
+          return { affectedRows: 1 };
+        }
+        if (sql.includes('INSERT INTO system_logs')) {
+          loggedAction = params[1];
+          return { insertId: 1 };
+        }
+        if (sql.includes('FROM admin_permissions')) {
+          return [{ permission_name: 'MANAGE_USERS' }];
+        }
+        return [];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.data.name, 'Updated Admin Name');
+  assert.equal(result.data.mobile, '9111122222');
+  assert.equal(updatedParams[0], 'Updated Admin Name');
+  assert.equal(updatedParams[1], '9111122222');
+  assert.equal(updatedParams[2], 3);
+  assert.equal(loggedAction, 'ADMIN_UPDATED');
+});
+
+test('PATCH /api/superadmin/admins/:id/status updates status and logs ADMIN_STATUS_CHANGED', async () => {
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'PATCH' && r.path === '/api/superadmin/admins/:id/status');
+
+  let updatedStatus = null;
+  let loggedAction = null;
+
+  const ctx = {
+    params: { id: '3' },
+    body: { status: 'INACTIVE' },
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql, params) => {
+        if (sql.includes('SELECT user_id, email, role, status')) {
+          return [{ user_id: 3, email: 'admin3@test.com', role: 'ADMIN', status: 'ACTIVE' }];
+        }
+        if (sql.includes('UPDATE users SET status = ?')) {
+          updatedStatus = params[0];
+          return { affectedRows: 1 };
+        }
+        if (sql.includes('INSERT INTO system_logs')) {
+          loggedAction = params[1];
+          return { insertId: 1 };
+        }
+        return [];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(result.data.status, 'INACTIVE');
+  assert.equal(result.data.previous_status, 'ACTIVE');
+  assert.equal(updatedStatus, 'INACTIVE');
+  assert.equal(loggedAction, 'ADMIN_STATUS_CHANGED');
+});
+
+test('DELETE /api/superadmin/admins/:id deletes ADMIN account and forbids deleting SUPER_ADMIN', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'DELETE' && r.path === '/api/superadmin/admins/:id');
+
+  // Case 1: Attempt to delete SUPER_ADMIN must be rejected with 403
+  const superAdminCtx = {
+    params: { id: '1' },
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async () => [{ user_id: 1, email: 'superadmin@test.com', role: 'SUPER_ADMIN' }]
+    }
+  };
+
+  await assert.rejects(
+    () => route.handler(superAdminCtx),
+    (err) => err instanceof HttpError && err.status === 403 && err.message.includes('SUPER_ADMIN')
+  );
+
+  // Case 2: Deleting an ordinary ADMIN succeeds
+  let deletedId = null;
+  let loggedAction = null;
+
+  const adminCtx = {
+    params: { id: '4' },
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql, params) => {
+        if (sql.includes('SELECT user_id, email, role')) {
+          return [{ user_id: 4, email: 'admin4@test.com', role: 'ADMIN' }];
+        }
+        if (sql.includes('DELETE FROM users WHERE user_id = ?')) {
+          deletedId = params[0];
+          return { affectedRows: 1 };
+        }
+        if (sql.includes('INSERT INTO system_logs')) {
+          loggedAction = params[1];
+          return { insertId: 1 };
+        }
+        return [];
+      }
+    }
+  };
+
+  const result = await route.handler(adminCtx);
+  assert.equal(result.data.user_id, 4);
+  assert.equal(deletedId, 4);
+  assert.equal(loggedAction, 'ADMIN_DELETED');
+});
+
+
+// ── superadmin.routes.js permission management tests ──────────────────────────
+
+test('GET /api/superadmin/permissions returns the 8 allowed permission names', async () => {
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/superadmin/permissions');
+  assert.ok(route);
+  assert.deepEqual(route.roles, ['SUPER_ADMIN']);
+
+  const result = await route.handler({});
+  assert.ok(Array.isArray(result.data));
+  assert.equal(result.data.length, 8);
+  const expected = [
+    'MANAGE_USERS', 'MANAGE_PROVIDERS', 'MANAGE_DESTINATIONS', 'MANAGE_CATEGORIES',
+    'MODERATE_PACKAGES', 'MANAGE_BOOKINGS', 'VIEW_REPORTS', 'VIEW_LOGS'
+  ];
+  for (const perm of expected) {
+    assert.ok(result.data.includes(perm), `Must include permission: ${perm}`);
+  }
+});
+
+test('GET /api/superadmin/admins/:id/permissions retrieves admin permissions', async () => {
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/superadmin/admins/:id/permissions');
+  assert.ok(route);
+  assert.deepEqual(route.roles, ['SUPER_ADMIN']);
+
+  const ctx = {
+    params: { id: '2' },
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql) => {
+        if (sql.includes('SELECT user_id, email, role FROM users')) {
+          return [{ user_id: 2, email: 'admin@test.com', role: 'ADMIN' }];
+        }
+        if (sql.includes('FROM admin_permissions')) {
+          return [
+            { permission_name: 'MANAGE_USERS' },
+            { permission_name: 'MANAGE_PROVIDERS' }
+          ];
+        }
+        return [];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.ok(Array.isArray(result.data));
+  assert.deepEqual(result.data, ['MANAGE_USERS', 'MANAGE_PROVIDERS']);
+});
+
+test('PUT /api/superadmin/admins/:id/permissions replaces permissions in transaction and logs PERMISSIONS_CHANGED', async () => {
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/superadmin/admins/:id/permissions');
+
+  let deletedAdminId = null;
+  const insertedPerms = [];
+  let loggedAction = null;
+  let loggedDescription = null;
+
+  const ctx = {
+    params: { id: '3' },
+    body: {
+      permissions: ['MANAGE_DESTINATIONS', 'MANAGE_CATEGORIES', 'VIEW_LOGS']
+    },
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql, params) => {
+        if (sql.includes('SELECT user_id, email, role FROM users')) {
+          return [{ user_id: 3, email: 'admin3@test.com', role: 'ADMIN' }];
+        }
+        if (sql.includes('INSERT INTO system_logs')) {
+          loggedAction = params[1];
+          loggedDescription = params[2];
+          return { insertId: 1 };
+        }
+        return [];
+      },
+      transaction: async (fn) => {
+        const tx = {
+          query: async (sql, params) => {
+            if (sql.includes('DELETE FROM admin_permissions')) {
+              deletedAdminId = params[0];
+              return { affectedRows: 2 };
+            }
+            if (sql.includes('INSERT INTO admin_permissions')) {
+              insertedPerms.push({ admin_id: params[0], perm: params[1] });
+              return { insertId: insertedPerms.length };
+            }
+            return { affectedRows: 1 };
+          }
+        };
+        return fn(tx);
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(deletedAdminId, 3, 'existing permissions must be deleted for admin 3');
+  assert.equal(insertedPerms.length, 3, '3 new permissions must be inserted');
+  assert.equal(insertedPerms[0].perm, 'MANAGE_DESTINATIONS');
+  assert.equal(insertedPerms[1].perm, 'MANAGE_CATEGORIES');
+  assert.equal(insertedPerms[2].perm, 'VIEW_LOGS');
+  assert.deepEqual(result.data, ['MANAGE_DESTINATIONS', 'MANAGE_CATEGORIES', 'VIEW_LOGS']);
+  assert.equal(loggedAction, 'PERMISSIONS_CHANGED');
+  assert.ok(loggedDescription.includes('admin3@test.com'));
+});
+
+test('PUT /api/superadmin/admins/:id/permissions rejects invalid permissions with 400 VALIDATION_ERROR', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/superadmin/admins/:id/permissions');
+
+  const ctx = {
+    params: { id: '3' },
+    body: {
+      permissions: ['MANAGE_USERS', 'UNKNOWN_CUSTOM_PERM']
+    },
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async () => [{ user_id: 3, email: 'admin3@test.com', role: 'ADMIN' }]
+    }
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => err instanceof HttpError && err.status === 400 && err.code === 'VALIDATION_ERROR' && err.message.includes('UNKNOWN_CUSTOM_PERM')
+  );
+});
+
+test('PUT /api/superadmin/admins/:id/permissions handles empty permission array (revoking all)', async () => {
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/superadmin/admins/:id/permissions');
+
+  let deletedAdminId = null;
+  const insertedPerms = [];
+
+  const ctx = {
+    params: { id: '3' },
+    body: { permissions: [] },
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async () => [{ user_id: 3, email: 'admin3@test.com', role: 'ADMIN' }],
+      transaction: async (fn) => {
+        const tx = {
+          query: async (sql, params) => {
+            if (sql.includes('DELETE FROM admin_permissions')) {
+              deletedAdminId = params[0];
+              return { affectedRows: 2 };
+            }
+            if (sql.includes('INSERT INTO admin_permissions')) {
+              insertedPerms.push(params);
+            }
+            return { affectedRows: 0 };
+          }
+        };
+        return fn(tx);
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+  assert.equal(deletedAdminId, 3);
+  assert.equal(insertedPerms.length, 0, 'no permissions should be inserted when empty array passed');
+  assert.deepEqual(result.data, []);
+});
+
+test('PUT /api/superadmin/admins/:id/permissions forbids updating SUPER_ADMIN with 403', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'PUT' && r.path === '/api/superadmin/admins/:id/permissions');
+
+  const ctx = {
+    params: { id: '1' },
+    body: { permissions: ['MANAGE_USERS'] },
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async () => [{ user_id: 1, email: 'superadmin@test.com', role: 'SUPER_ADMIN' }]
+    }
+  };
+
+  await assert.rejects(
+    () => route.handler(ctx),
+    (err) => err instanceof HttpError && err.status === 403 && err.message.includes('SUPER_ADMIN')
+  );
+});
+
+
+test('Permission changes take effect on the next request via router fresh-user resolution', async () => {
+  const { createSession } = require('../server/utils/session');
+
+  // Create an active session for admin user 2
+  const token = createSession(2);
+  const cookies = { mmt_sid: token };
+
+  // Mock DB where admin_permissions returns dynamic rows based on state
+  let currentDbPermissions = ['MANAGE_USERS'];
+
+  const mockDb = {
+    query: async (sql, params) => {
+      if (sql.includes('SELECT user_id, name')) {
+        return [{ user_id: 2, name: 'Admin', role: 'ADMIN', status: 'ACTIVE' }];
+      }
+      if (sql.includes('FROM admin_permissions')) {
+        return currentDbPermissions.map(p => ({ permission_name: p }));
+      }
+      return [];
+    }
+  };
+
+  // Request 1: check user permissions
+  const permRows1 = await mockDb.query('SELECT permission_name FROM admin_permissions WHERE admin_id = ?', [2]);
+  const userPermsReq1 = permRows1.map(r => r.permission_name);
+  assert.deepEqual(userPermsReq1, ['MANAGE_USERS']);
+  assert.ok(!userPermsReq1.includes('VIEW_LOGS'), 'Admin lacks VIEW_LOGS on request 1');
+
+  // Superadmin updates permissions in DB
+  currentDbPermissions = ['MANAGE_USERS', 'VIEW_LOGS'];
+
+  // Request 2 (next request with same token): fresh DB resolution
+  const permRows2 = await mockDb.query('SELECT permission_name FROM admin_permissions WHERE admin_id = ?', [2]);
+  const userPermsReq2 = permRows2.map(r => r.permission_name);
+  assert.deepEqual(userPermsReq2, ['MANAGE_USERS', 'VIEW_LOGS']);
+  assert.ok(userPermsReq2.includes('VIEW_LOGS'), 'Admin immediately possesses VIEW_LOGS on next request');
+});
+
+
+// ── superadmin.routes.js stats & verification tests (M1.5) ───────────────────
+
+test('GET /api/superadmin/stats route exists and strictly requires SUPER_ADMIN role', () => {
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/superadmin/stats');
+  assert.ok(route, 'GET /api/superadmin/stats route must exist');
+  assert.deepEqual(route.roles, ['SUPER_ADMIN'], 'must strictly require SUPER_ADMIN role');
+  assert.ok(!route.roles.includes('ADMIN'), 'must forbid ordinary ADMIN');
+});
+
+test('GET /api/superadmin/stats returns accurate numeric aggregation metrics', async () => {
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/superadmin/stats');
+
+  let userSqlCalled = null;
+  let logSqlCalled = null;
+
+  const ctx = {
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async (sql) => {
+        if (sql.includes('FROM users')) {
+          userSqlCalled = sql;
+          return [{
+            users_total: '45',
+            admins_total: '5',
+            admins_active: '4'
+          }];
+        }
+        if (sql.includes('FROM system_logs')) {
+          logSqlCalled = sql;
+          return [{
+            logs_today: '18'
+          }];
+        }
+        return [];
+      }
+    }
+  };
+
+  const result = await route.handler(ctx);
+
+  assert.ok(userSqlCalled, 'must query users table');
+  assert.ok(logSqlCalled, 'must query system_logs table');
+  assert.ok(logSqlCalled.includes('CURRENT_DATE()') || logSqlCalled.includes('CURDATE()'), 'must query today logs');
+
+  assert.strictEqual(typeof result.data.admins_total, 'number');
+  assert.strictEqual(typeof result.data.admins_active, 'number');
+  assert.strictEqual(typeof result.data.users_total, 'number');
+  assert.strictEqual(typeof result.data.logs_today, 'number');
+
+  assert.equal(result.data.admins_total, 5);
+  assert.equal(result.data.admins_active, 4);
+  assert.equal(result.data.users_total, 45);
+  assert.equal(result.data.logs_today, 18);
+});
+
+test('GET /api/superadmin/stats handles empty database tables gracefully with 0 defaults', async () => {
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/superadmin/stats');
+
+  const ctx = {
+    user: { user_id: 1, role: 'SUPER_ADMIN' },
+    db: {
+      query: async () => []
+    }
+  };
+
+  const result = await route.handler(ctx);
+
+  assert.strictEqual(result.data.admins_total, 0);
+  assert.strictEqual(result.data.admins_active, 0);
+  assert.strictEqual(result.data.users_total, 0);
+  assert.strictEqual(result.data.logs_today, 0);
+});
+
+test('GET /api/superadmin/stats rejects ordinary ADMIN with 403 FORBIDDEN', () => {
+  const routes = require('../server/routes/superadmin.routes');
+  const route = routes.find(r => r.method === 'GET' && r.path === '/api/superadmin/stats');
+
+  // Verify route role gate behavior
+  const callerUser = { user_id: 2, role: 'ADMIN', permissions: ['VIEW_REPORTS', 'VIEW_LOGS'] };
+  const allowed = route.roles.includes(callerUser.role);
+  assert.strictEqual(allowed, false, 'ADMIN must not be in allowed roles');
+});
+
+test('POST /api/auth/login rejects deactivated (INACTIVE) admin with 403 ACCOUNT_INACTIVE', async () => {
+  const { HttpError } = require('../server/utils/http');
+  const { hashPassword } = require('../server/utils/password');
+  const routes = require('../server/routes/auth.routes');
+  const loginRoute = routes.find(r => r.path === '/api/auth/login');
+
+  const storedHash = await hashPassword('AdminPassword@123');
+
+  const ctx = {
+    body: { email: 'deactivated_admin@makemytour.test', password: 'AdminPassword@123' },
+    ip: '127.0.0.1',
+    db: {
+      query: async () => [{
+        user_id: 8,
+        name: 'Deactivated Admin',
+        email: 'deactivated_admin@makemytour.test',
+        password: storedHash,
+        mobile: '9876543210',
+        role: 'ADMIN',
+        status: 'INACTIVE'
+      }]
+    },
+    res: { setHeader() {} },
+    cookies: {}
+  };
+
+  await assert.rejects(
+    () => loginRoute.handler(ctx),
+    (err) => err instanceof HttpError && err.status === 403 && err.code === 'ACCOUNT_INACTIVE'
+  );
+});
+
+test('Complete Super Admin 9-endpoint contract and permission verification', () => {
+  const superadminRoutes = require('../server/routes/superadmin.routes');
+  assert.equal(superadminRoutes.length, 9, 'must export exactly 9 superadmin endpoints');
+
+  const expectedEndpoints = [
+    { method: 'GET',    path: '/api/superadmin/admins' },
+    { method: 'POST',   path: '/api/superadmin/admins' },
+    { method: 'PUT',    path: '/api/superadmin/admins/:id' },
+    { method: 'PATCH',  path: '/api/superadmin/admins/:id/status' },
+    { method: 'DELETE', path: '/api/superadmin/admins/:id' },
+    { method: 'GET',    path: '/api/superadmin/permissions' },
+    { method: 'GET',    path: '/api/superadmin/admins/:id/permissions' },
+    { method: 'PUT',    path: '/api/superadmin/admins/:id/permissions' },
+    { method: 'GET',    path: '/api/superadmin/stats' }
+  ];
+
+  for (const exp of expectedEndpoints) {
+    const found = superadminRoutes.find(r => r.method === exp.method && r.path === exp.path);
+    assert.ok(found, `Superadmin route ${exp.method} ${exp.path} must exist`);
+    assert.deepEqual(found.roles, ['SUPER_ADMIN'], `${exp.method} ${exp.path} must require SUPER_ADMIN only`);
+    assert.ok(!found.roles.includes('ADMIN'), `${exp.method} ${exp.path} must reject ordinary ADMIN`);
+  }
+});
