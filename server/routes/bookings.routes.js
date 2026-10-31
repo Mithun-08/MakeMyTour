@@ -12,6 +12,20 @@ const {
 } = require('../utils/bookingRules');
 
 const VALID_BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function verifyAdminManageBookings(ctx) {
+  if (!ctx.user) {
+    throw new HttpError(401, 'UNAUTHENTICATED', 'Authentication required');
+  }
+  if (ctx.user.role === 'SUPER_ADMIN') {
+    return; // SUPER_ADMIN always has permission bypass
+  }
+  const permissions = Array.isArray(ctx.user.permissions) ? ctx.user.permissions : [];
+  if (ctx.user.role !== 'ADMIN' || (!permissions.includes('MANAGE_BOOKINGS') && !permissions.includes('*'))) {
+    throw new HttpError(403, 'FORBIDDEN', 'Permission required: MANAGE_BOOKINGS');
+  }
+}
 
 function parseStrictPositiveInt(value) {
   if (value === undefined || value === null) return null;
@@ -255,6 +269,13 @@ module.exports = [
     path: '/api/bookings/:id/status',
     roles: ['PROVIDER', 'ADMIN'],
     handler: updateBookingStatus
+  },
+  {
+    method: 'GET',
+    path: '/api/admin/bookings',
+    roles: ['ADMIN'],
+    permission: 'MANAGE_BOOKINGS',
+    handler: getAdminBookings
   }
 ];
 
@@ -1059,5 +1080,138 @@ async function updateBookingStatus(ctx) {
     status: 200,
     data: result,
     message: `Booking status updated to ${newStatus}`
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/admin/bookings  (ADMIN + MANAGE_BOOKINGS, SUPER_ADMIN)
+// ─────────────────────────────────────────────────────────────────────────────
+async function getAdminBookings(ctx) {
+  verifyAdminManageBookings(ctx);
+
+  const { page, pageSize, offset } = parsePagination(ctx.query);
+  const whereConditions = [];
+  const filterParams = [];
+
+  // 1. Status filter
+  if (ctx.query?.status !== undefined && ctx.query?.status !== null && String(ctx.query.status).trim() !== '') {
+    const rawStatus = String(ctx.query.status).trim();
+    const statusParam = rawStatus.toUpperCase();
+
+    if (!VALID_BOOKING_STATUSES.includes(statusParam)) {
+      throw new HttpError(
+        400,
+        'VALIDATION_ERROR',
+        `Unsupported booking status filter: '${rawStatus}'. Must be one of: ${VALID_BOOKING_STATUSES.join(', ')}`,
+        { status: `Must be one of: ${VALID_BOOKING_STATUSES.join(', ')}` }
+      );
+    }
+
+    whereConditions.push('b.booking_status = ?');
+    filterParams.push(statusParam);
+  }
+
+  // 2. Search filter (customer name, email, mobile, or package title)
+  const rawSearch = ctx.query?.search !== undefined && ctx.query?.search !== null && String(ctx.query.search).trim() !== ''
+    ? String(ctx.query.search).trim()
+    : (ctx.query?.q !== undefined && ctx.query?.q !== null && String(ctx.query.q).trim() !== '' ? String(ctx.query.q).trim() : '');
+
+  if (rawSearch) {
+    whereConditions.push('(cu.name LIKE ? OR cu.email LIKE ? OR cu.mobile LIKE ? OR p.title LIKE ?)');
+    const term = `%${rawSearch}%`;
+    filterParams.push(term, term, term, term);
+  }
+
+  // 3. Date filters (from / to on b.booked_at)
+  if (ctx.query?.from !== undefined && ctx.query?.from !== null && String(ctx.query.from).trim() !== '') {
+    const fromStr = String(ctx.query.from).trim();
+    if (!DATE_RE.test(fromStr) || isNaN(new Date(fromStr).getTime())) {
+      throw new HttpError(400, 'VALIDATION_ERROR', "Invalid 'from' date format. Must be YYYY-MM-DD", { from: 'Must be YYYY-MM-DD' });
+    }
+    whereConditions.push('DATE(b.booked_at) >= ?');
+    filterParams.push(fromStr);
+  }
+
+  if (ctx.query?.to !== undefined && ctx.query?.to !== null && String(ctx.query.to).trim() !== '') {
+    const toStr = String(ctx.query.to).trim();
+    if (!DATE_RE.test(toStr) || isNaN(new Date(toStr).getTime())) {
+      throw new HttpError(400, 'VALIDATION_ERROR', "Invalid 'to' date format. Must be YYYY-MM-DD", { to: 'Must be YYYY-MM-DD' });
+    }
+    whereConditions.push('DATE(b.booked_at) <= ?');
+    filterParams.push(toStr);
+  }
+
+  const whereClause = whereConditions.length > 0 ? whereConditions.join(' AND ') : '1=1';
+
+  // Total count
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM bookings b
+    JOIN users cu ON cu.user_id = b.customer_id
+    JOIN tour_packages p ON p.package_id = b.package_id
+    JOIN users pu ON pu.user_id = p.provider_id
+    JOIN package_availability a ON a.availability_id = b.availability_id
+    WHERE ${whereClause}
+  `;
+  const countRows = await ctx.db.query(countSql, filterParams);
+  const total = Number(countRows[0]?.total || 0);
+
+  // Data query
+  const dataSql = `
+    SELECT
+      b.booking_id,
+      b.customer_id,
+      b.package_id,
+      b.availability_id,
+      b.travelers,
+      b.total_amount,
+      b.booking_status,
+      b.payment_status,
+      b.booked_at,
+      p.title AS package_title,
+      p.provider_id,
+      pu.name AS provider_name,
+      a.available_date,
+      cu.name AS customer_name,
+      cu.email AS customer_email,
+      cu.mobile AS customer_mobile
+    FROM bookings b
+    JOIN users cu ON cu.user_id = b.customer_id
+    JOIN tour_packages p ON p.package_id = b.package_id
+    JOIN users pu ON pu.user_id = p.provider_id
+    JOIN package_availability a ON a.availability_id = b.availability_id
+    WHERE ${whereClause}
+    ORDER BY b.booked_at DESC, b.booking_id DESC
+    LIMIT ? OFFSET ?
+  `;
+
+  const rows = await ctx.db.query(dataSql, [...filterParams, pageSize, offset]);
+
+  const data = rows.map((r) => ({
+    booking_id: Number(r.booking_id),
+    customer_id: Number(r.customer_id),
+    customer_name: r.customer_name,
+    customer_email: r.customer_email,
+    customer_mobile: r.customer_mobile,
+    package_id: Number(r.package_id),
+    package_title: r.package_title,
+    provider_id: Number(r.provider_id),
+    provider_name: r.provider_name || null,
+    availability_id: Number(r.availability_id),
+    available_date: formatIsoDate(r.available_date),
+    travelers: Number(r.travelers),
+    total_amount: Number(r.total_amount),
+    booking_status: r.booking_status,
+    payment_status: r.payment_status,
+    booked_at: r.booked_at instanceof Date ? r.booked_at.toISOString() : String(r.booked_at)
+  }));
+
+  return {
+    data,
+    meta: {
+      page,
+      pageSize,
+      total
+    }
   };
 }
