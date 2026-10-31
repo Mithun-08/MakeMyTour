@@ -7,7 +7,8 @@ const {
   canCancel,
   canReview,
   canCustomerCancel,
-  seatStatusAfterRestore
+  seatStatusAfterRestore,
+  validateProviderStatusTransition
 } = require('../utils/bookingRules');
 
 const VALID_BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'];
@@ -248,6 +249,12 @@ module.exports = [
     path: '/api/bookings/:id/pay',
     roles: ['CUSTOMER'],
     handler: processBookingPayment
+  },
+  {
+    method: 'PATCH',
+    path: '/api/bookings/:id/status',
+    roles: ['PROVIDER', 'ADMIN'],
+    handler: updateBookingStatus
   }
 ];
 
@@ -883,5 +890,174 @@ async function processBookingPayment(ctx) {
     status: 200,
     data: result,
     message: 'Payment processed successfully'
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/bookings/:id/status  (PROVIDER owner of package, ADMIN + MANAGE_BOOKINGS)
+// ─────────────────────────────────────────────────────────────────────────────
+async function updateBookingStatus(ctx) {
+  const bookingId = parseStrictPositiveInt(ctx.params?.id);
+  if (!bookingId) {
+    throw new HttpError(400, 'BAD_REQUEST', 'Invalid booking ID in request parameter');
+  }
+
+  const body = validate(ctx.body, {
+    status: {
+      required: true,
+      type: 'string'
+    }
+  });
+
+  const newStatus = body.status.trim().toUpperCase();
+  if (!VALID_BOOKING_STATUSES.includes(newStatus)) {
+    throw new HttpError(
+      400,
+      'VALIDATION_ERROR',
+      `Unsupported booking status: '${body.status}'. Must be one of: ${VALID_BOOKING_STATUSES.join(', ')}`,
+      { status: `Must be one of: ${VALID_BOOKING_STATUSES.join(', ')}` }
+    );
+  }
+
+  const result = await ctx.db.transaction(async (tx) => {
+    // 1. Lock booking row and fetch associated provider_id
+    const bookingRows = await tx.query(
+      `SELECT b.booking_id, b.customer_id, b.package_id, b.availability_id, b.travelers,
+              b.total_amount, b.booking_status, b.payment_status,
+              p.provider_id
+       FROM bookings b
+       JOIN tour_packages p ON p.package_id = b.package_id
+       WHERE b.booking_id = ?
+       FOR UPDATE`,
+      [bookingId]
+    );
+
+    if (!bookingRows.length) {
+      throw new HttpError(404, 'NOT_FOUND', 'Booking not found');
+    }
+
+    const booking = bookingRows[0];
+
+    // 2. Authorization check
+    if (ctx.user.role === 'CUSTOMER') {
+      throw new HttpError(403, 'FORBIDDEN', 'Access denied: customers cannot update booking status');
+    } else if (ctx.user.role === 'PROVIDER') {
+      if (Number(booking.provider_id) !== Number(ctx.user.user_id)) {
+        throw new HttpError(403, 'FORBIDDEN', 'Access denied: you can only update bookings for your own packages');
+      }
+    } else if (ctx.user.role === 'ADMIN') {
+      const hasPermission = Array.isArray(ctx.user.permissions) && (
+        ctx.user.permissions.includes('MANAGE_BOOKINGS') ||
+        ctx.user.permissions.includes('*')
+      );
+      if (!hasPermission) {
+        throw new HttpError(403, 'FORBIDDEN', 'Permission required: MANAGE_BOOKINGS');
+      }
+    } else if (ctx.user.role === 'SUPER_ADMIN') {
+      // SUPER_ADMIN has full access
+    } else {
+      throw new HttpError(403, 'FORBIDDEN', 'Insufficient role');
+    }
+
+    // 3. Lock availability row
+    const availRows = await tx.query(
+      `SELECT availability_id, package_id, available_date, seats_available, status
+       FROM package_availability
+       WHERE availability_id = ?
+       FOR UPDATE`,
+      [booking.availability_id]
+    );
+
+    if (!availRows.length) {
+      throw new HttpError(404, 'NOT_FOUND', 'Package availability not found');
+    }
+
+    const avail = availRows[0];
+
+    // 4. Determine current date
+    let today = formatIsoDate(new Date());
+    try {
+      const todayRows = await tx.query('SELECT CURDATE() AS today');
+      if (todayRows.length && todayRows[0].today) {
+        today = formatIsoDate(todayRows[0].today);
+      }
+    } catch (_) {}
+
+    const availableDate = formatIsoDate(avail.available_date);
+
+    // 5. Validate status transition
+    const transition = validateProviderStatusTransition(
+      booking.booking_status,
+      newStatus,
+      availableDate,
+      today
+    );
+
+    if (!transition.ok) {
+      throw new HttpError(409, 'CONFLICT', transition.reason);
+    }
+
+    let newPaymentStatus = booking.payment_status;
+
+    // 6. Apply state changes
+    if (newStatus === 'CONFIRMED') {
+      await tx.query(
+        `UPDATE bookings
+         SET booking_status = 'CONFIRMED'
+         WHERE booking_id = ?`,
+        [bookingId]
+      );
+    } else if (newStatus === 'COMPLETED') {
+      await tx.query(
+        `UPDATE bookings
+         SET booking_status = 'COMPLETED'
+         WHERE booking_id = ?`,
+        [bookingId]
+      );
+    } else if (newStatus === 'CANCELLED') {
+      // Restore seats
+      const newSeats = Number(avail.seats_available) + Number(booking.travelers);
+      const newStatusAvail = seatStatusAfterRestore(avail.status);
+
+      await tx.query(
+        `UPDATE package_availability
+         SET seats_available = ?, status = ?
+         WHERE availability_id = ?`,
+        [newSeats, newStatusAvail, avail.availability_id]
+      );
+
+      // Refund if paid
+      if (booking.payment_status === 'PAID') {
+        newPaymentStatus = 'REFUNDED';
+        await tx.query(
+          `UPDATE payments
+           SET payment_status = 'REFUNDED'
+           WHERE booking_id = ?`,
+          [bookingId]
+        );
+      }
+
+      await tx.query(
+        `UPDATE bookings
+         SET booking_status = 'CANCELLED', payment_status = ?
+         WHERE booking_id = ?`,
+        [newPaymentStatus, bookingId]
+      );
+    }
+
+    return {
+      booking_id: Number(bookingId),
+      booking_status: newStatus,
+      payment_status: newPaymentStatus,
+      ...(newStatus === 'CANCELLED' ? { seats_restored: Number(booking.travelers) } : {})
+    };
+  });
+
+  await logAction(ctx, 'BOOKING_STATUS_CHANGED', `Booking ${bookingId} status updated to ${newStatus}`);
+
+  return {
+    status: 200,
+    data: result,
+    message: `Booking status updated to ${newStatus}`
   };
 }

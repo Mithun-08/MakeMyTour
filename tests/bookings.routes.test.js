@@ -30,6 +30,10 @@ const payRoute = routes.find(
   route => route.method === 'POST' && route.path === '/api/bookings/:id/pay'
 );
 
+const statusRoute = routes.find(
+  route => route.method === 'PATCH' && route.path === '/api/bookings/:id/status'
+);
+
 function makeContext(options = {}) {
   const calls = [];
 
@@ -714,14 +718,16 @@ function makeProviderContext(options = {}) {
 }
 
 describe('Booking Route Foundation & Registration', () => {
-  it('registers all 6 booking foundation routes', () => {
-    assert.equal(routes.length, 6);
+  it('registers all 7 booking foundation routes', () => {
+    assert.equal(routes.length, 7);
     assert.equal(createRoute !== undefined, true);
     assert.equal(mineRoute !== undefined, true);
     assert.equal(idRoute !== undefined, true);
     assert.equal(providerBookingsRoute !== undefined, true);
     assert.equal(cancelRoute !== undefined, true);
     assert.equal(payRoute !== undefined, true);
+    assert.equal(statusRoute !== undefined, true);
+    assert.deepEqual(statusRoute.roles, ['PROVIDER', 'ADMIN']);
   });
 });
 
