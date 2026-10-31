@@ -6,7 +6,7 @@
   <title>Home | MakeMyTour — Local Tourism Package Booking</title>
   <meta name="description" content="Discover and book local tourism packages curated by trusted local providers. Explore destinations, compare packages and book your next adventure with MakeMyTour.">
 
-  <!-- Shared stylesheet (M2, frozen Day 1) -->
+  <!-- Shared stylesheet -->
   <link rel="stylesheet" href="/css/style.css">
 
   <!-- Google Fonts -->
@@ -21,7 +21,7 @@
 
   <main id="app" class="container">
 
-    <!-- ══ Hero ══════════════════════════════════════════════ -->
+    <!-- Hero -->
     <section class="hero" aria-labelledby="hero-heading">
       <div class="hero-content">
         <span class="hero-eyebrow">🧭 Local Tourism · India</span>
@@ -51,22 +51,19 @@
       </div>
     </section>
 
-    <!-- ══ Destinations strip ════════════════════════════════ -->
+    <!-- Destinations strip -->
     <section class="section" aria-labelledby="dest-heading">
       <div class="section-head">
         <h2 class="section-title" id="dest-heading">Popular Destinations</h2>
         <a class="section-link" href="/destinations.html">View all →</a>
       </div>
-      <!--
-        Populated by home.js via api.get('/api/destinations').
-        Shows loading → chips or empty/error state.
-      -->
+
       <div id="home-dest-list" class="dest-chips" aria-live="polite" aria-label="Destination list">
         <!-- JS inserts destination chips here -->
       </div>
     </section>
 
-    <!-- ══ Featured Packages ════════════════════════════════ -->
+    <!-- Featured Packages -->
     <section class="section" aria-labelledby="featured-heading">
       <div class="section-head">
         <h2 class="section-title" id="featured-heading">Featured Packages</h2>
@@ -89,16 +86,12 @@
         </button>
       </form>
 
-      <!--
-        Populated by home.js via api.get('/api/packages', { sort:'rating', pageSize:6 }).
-        Shows loading → package cards or empty/error state.
-      -->
       <div id="home-featured-grid" class="grid grid-3" aria-live="polite" aria-label="Featured packages">
         <!-- JS inserts package cards here -->
       </div>
     </section>
 
-    <!-- ══ How it works ═════════════════════════════════════ -->
+    <!-- How it works -->
     <section class="section" aria-labelledby="how-heading">
       <h2 class="section-title text-center" id="how-heading" style="margin-bottom:var(--sp-8);">How MakeMyTour Works</h2>
       <div class="grid grid-3">
@@ -124,7 +117,7 @@
       </div>
     </section>
 
-    <!-- ══ CTA strip ════════════════════════════════════════ -->
+    <!-- CTA strip -->
     <section
       class="section"
       style="background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary)); border-radius: var(--radius-xl); padding: var(--sp-12) var(--sp-8); text-align:center; color:white;"
@@ -145,7 +138,7 @@
   <!-- Footer filled by layout.js -->
   <footer id="site-footer"></footer>
 
-  <!-- Foundation scripts (M2, frozen Day 1) — order matters -->
+  <!-- Foundation scripts — order matters -->
   <script src="/js/api.js"></script>
   <script src="/js/ui.js"></script>
   <script src="/js/auth.js"></script>
