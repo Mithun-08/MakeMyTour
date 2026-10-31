@@ -60,9 +60,11 @@
    * @param {string} url     Absolute path like /api/packages
    * @param {object|null} body   Request body (omit for GET/DELETE)
    * @param {object|null} params Query params object (used by GET)
+   * @param {object} [options]  { skipAuthRedirect: true } → reject on 401 instead of redirecting
    * @returns {Promise<{data, meta?, message?}>}
    */
-  function request(method, url, body, params) {
+  function request(method, url, body, params, options) {
+    var skipAuthRedirect = !!(options && options.skipAuthRedirect);
     var fullUrl = url + buildQueryString(params);
 
     var opts = {
@@ -89,7 +91,7 @@
       var json   = result.json;
 
       /* ── 401 handling ─────────────────────────────────── */
-      if (status === 401) {
+      if (status === 401 && !skipAuthRedirect) {
         var currentPage = window.location.pathname;
         if (currentPage !== '/login.html') {
           var next = encodeURIComponent(currentPage + window.location.search);
@@ -154,18 +156,20 @@
      * GET /api/path?key=val
      * @param {string} url
      * @param {object} [params]  key/value pairs for query string
+     * @param {object} [options] { skipAuthRedirect }
      */
-    get: function (url, params) {
-      return request('GET', url, null, params);
+    get: function (url, params, options) {
+      return request('GET', url, null, params, options);
     },
 
     /**
      * POST /api/path  with JSON body
      * @param {string} url
      * @param {object} [body]
+     * @param {object} [options] { skipAuthRedirect }
      */
-    post: function (url, body) {
-      return request('POST', url, body || {}, null);
+    post: function (url, body, options) {
+      return request('POST', url, body || {}, null, options);
     },
 
     /**
