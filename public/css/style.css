@@ -1,17 +1,10 @@
-/* =============================================================
-   MakeMyTour — Shared Stylesheet
-   Owner: M2 (Meharnaz)
-   Frozen after Day 1. Bug fixes go to the owner only.
-   Contract: docs/CONTRACT.md §1.8
-   ============================================================= */
-
-/* ── 1. CSS Custom Properties ────────────────────────────────── */
+/* 1. CSS Custom Properties */
 :root {
   /* Brand palette */
-  --color-primary:       #1a6b4a;   /* deep forest green */
+  --color-primary:       #1a6b4a;   
   --color-primary-dark:  #134d37;
   --color-primary-light: #e8f5ee;
-  --color-accent:        #f97316;   /* warm orange CTA */
+  --color-accent:        #f97316;   
   --color-accent-dark:   #ea6a0a;
   --color-danger:        #dc2626;
   --color-danger-light:  #fee2e2;
@@ -85,7 +78,7 @@
   --sidebar-w:   240px;
 }
 
-/* ── 2. Reset & Base ─────────────────────────────────────────── */
+/* 2. Reset & Base */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -140,7 +133,7 @@ hr {
   margin: var(--sp-6) 0;
 }
 
-/* ── 3. Layout ───────────────────────────────────────────────── */
+/* 3. Layout */
 .container {
   width: 100%;
   max-width: var(--max-w);
@@ -179,7 +172,7 @@ hr {
 .gap-4 { gap: var(--sp-4); }
 .gap-6 { gap: var(--sp-6); }
 
-/* ── 4. Navigation ───────────────────────────────────────────── */
+/* 4. Navigation */
 #site-header {
   position: fixed;
   top: 0;
@@ -298,7 +291,7 @@ hr {
 .nav-drawer.open { display: flex; flex-direction: column; gap: var(--sp-2); }
 .nav-drawer .nav-link { width: 100%; }
 
-/* ── 5. Footer ───────────────────────────────────────────────── */
+/* 5. Footer */
 #site-footer {
   background: var(--color-text);
   color: var(--color-text-light);
@@ -332,7 +325,7 @@ hr {
   font-size: var(--text-xs);
 }
 
-/* ── 6. Buttons ──────────────────────────────────────────────── */
+/* 6. Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -436,7 +429,7 @@ hr {
   animation: spin .6s linear infinite;
 }
 
-/* ── 7. Forms & Search Controls ──────────────────────────────── */
+/* 7. Forms & Search Controls */
 .form { display: flex; flex-direction: column; gap: var(--sp-5); }
 
 .field {
@@ -549,7 +542,7 @@ hr {
   grid-template-columns: 1fr;
 }
 
-/* ── 8. Cards ────────────────────────────────────────────────── */
+/* 8. Cards */
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border-light);
@@ -665,7 +658,7 @@ hr {
 }
 .stars-empty { color: var(--color-border); }
 
-/* ── 9. Table ────────────────────────────────────────────────── */
+/* 9. Table */
 .table-wrapper {
   width: 100%;
   overflow-x: auto;
@@ -694,7 +687,7 @@ hr {
 .table tbody tr:last-child td { border-bottom: none; }
 .table tbody tr:hover { background: var(--color-bg); }
 
-/* ── 10. Badges ──────────────────────────────────────────────── */
+/* 10. Badges */
 .badge {
   display: inline-block;
   padding: 2px var(--sp-2);
@@ -732,7 +725,7 @@ hr {
 .badge-closed    { background: var(--color-border-light);  color: var(--color-text-muted); }
 .badge-full      { background: var(--color-danger-light);  color: var(--color-danger); }
 
-/* ── 11. Loading, Error, Empty States ────────────────────────── */
+/* 11. Loading, Error, Empty States*/
 
 /* Generic loading spinner */
 .spinner {
@@ -787,7 +780,7 @@ hr {
   font-size: var(--text-sm);
 }
 
-/* ── 12. Toast ───────────────────────────────────────────────── */
+/* 12. Toast */
 #toast-container {
   position: fixed;
   bottom: var(--sp-6);
@@ -840,7 +833,7 @@ hr {
 @keyframes toast-in  { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 @keyframes toast-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(20px); } }
 
-/* ── 13. Modal ───────────────────────────────────────────────── */
+/* 13. Modal */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -894,7 +887,7 @@ hr {
 @keyframes fade-in  { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slide-up { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
 
-/* ── 14. Pagination ──────────────────────────────────────────── */
+/* 14. Pagination */
 .pagination {
   display: flex;
   align-items: center;
@@ -935,7 +928,7 @@ hr {
   cursor: not-allowed;
 }
 
-/* ── 15. Hero Section ────────────────────────────────────────── */
+/* 15. Hero Section */
 .hero {
   position: relative;
   min-height: 460px;
@@ -1003,7 +996,7 @@ hr {
 }
 .hero-search-input::placeholder { color: var(--color-text-light); }
 
-/* ── 16. Section Headings ────────────────────────────────────── */
+/* 16. Section Headings */
 .section { margin-bottom: var(--sp-12); }
 .section-head {
   display: flex;
@@ -1016,7 +1009,7 @@ hr {
 .section-title { font-size: var(--text-2xl); }
 .section-link  { font-size: var(--text-sm); font-weight: var(--font-medium); }
 
-/* ── 17. Destination chip ────────────────────────────────────── */
+/* 17. Destination chip */
 .dest-chip {
   display: inline-flex;
   align-items: center;
@@ -1041,7 +1034,7 @@ hr {
 }
 .dest-chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 
-/* ── 18. Alert / Callout ─────────────────────────────────────── */
+/* 18. Alert / Callout */
 .alert {
   display: flex;
   gap: var(--sp-3);
@@ -1058,7 +1051,7 @@ hr {
 .alert-info    { background: var(--color-info-light);    border-color: var(--color-info);    color: var(--color-info); }
 .alert-warning { background: var(--color-warning-light); border-color: var(--color-warning); color: var(--color-warning); }
 
-/* ── 19. Utility classes ─────────────────────────────────────── */
+/* 19. Utility classes */
 .sr-only {
   position: absolute;
   width: 1px; height: 1px;
@@ -1081,7 +1074,7 @@ hr {
 .w-full         { width: 100%; }
 .truncate       { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ── 20. Responsive Breakpoints ──────────────────────────────── */
+/* 20. Responsive Breakpoints */
 
 /* 600 px — small / tablet portrait */
 @media (min-width: 600px) {
