@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tour Package Details | MakeMyTour</title>
+  <meta name="description" content="View tour package details, itinerary, inclusions, exclusions and book departures on MakeMyTour.">
+
+  <!-- Shared stylesheet -->
+  <link rel="stylesheet" href="/css/style.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* Detail page specific layout styles */
+    .detail-layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--sp-8);
+      align-items: start;
+    }
+    @media (min-width: 900px) {
+      .detail-layout {
+        grid-template-columns: 2fr 1fr;
+      }
+      .detail-sidebar {
+        position: sticky;
+        top: calc(var(--nav-h) + var(--sp-4));
+      }
+    }
+    .detail-banner-img {
+      width: 100%;
+      height: 380px;
+      object-fit: cover;
+      display: block;
+    }
+    .itinerary-day {
+      border-left: 3px solid var(--color-primary);
+      padding-left: var(--sp-4);
+      margin-bottom: var(--sp-4);
+    }
+    .itinerary-day:last-child {
+      margin-bottom: 0;
+    }
+    .itinerary-day-num {
+      font-size: var(--text-xs);
+      font-weight: var(--font-semi);
+      color: var(--color-primary);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 2px;
+    }
+    .itinerary-day-title {
+      font-size: var(--text-base);
+      font-weight: var(--font-semi);
+      margin-bottom: var(--sp-1);
+    }
+    .itinerary-day-desc {
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      line-height: var(--leading);
+    }
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--sp-2);
+      font-size: var(--text-sm);
+      line-height: 1.5;
+    }
+    .check-icon-success {
+      color: var(--color-success);
+      font-weight: var(--font-bold);
+      flex-shrink: 0;
+    }
+    .check-icon-danger {
+      color: var(--color-danger);
+      font-weight: var(--font-bold);
+      flex-shrink: 0;
+    }
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+      font-size: var(--text-sm);
+      margin-bottom: var(--sp-6);
+      flex-wrap: wrap;
+    }
+    .breadcrumb a {
+      color: var(--color-text-muted);
+    }
+    .breadcrumb a:hover {
+      color: var(--color-primary);
+    }
+    .spec-item {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-1);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header filled by layout.js -->
+  <header id="site-header"></header>
+
+  <main id="app" class="container">
+
+    <!-- Breadcrumb navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/index.html">Home</a>
+      <span aria-hidden="true">&gt;</span>
+      <a href="/packages.html">Packages</a>
+      <span aria-hidden="true">&gt;</span>
+      <span id="breadcrumb-title" class="text-muted">Package Details</span>
+    </nav>
+
+    <!-- Loading State -->
+    <div id="detail-loading" aria-live="polite">
+      <div class="card" style="padding: var(--sp-10); text-align: center;">
+        <p class="text-muted" style="margin-bottom: 0;">Loading tour package details…</p>
+      </div>
+    </div>
+
+    <!-- Error State (hidden by default) -->
+    <div id="detail-error" class="card" style="padding: var(--sp-10); text-align: center;" hidden>
+      <div style="font-size: 3rem; margin-bottom: var(--sp-4);" aria-hidden="true">⚠️</div>
+      <h2 id="detail-error-title" style="margin-bottom: var(--sp-2);">Package Not Found</h2>
+      <p id="detail-error-message" class="text-muted" style="margin-bottom: var(--sp-6);">
+        The requested tour package is not available or does not exist.
+      </p>
+      <a href="/packages.html" class="btn btn-primary">Browse All Packages</a>
+    </div>
+
+    <!-- Main Content (hidden by default until loaded) -->
+    <div id="detail-content" class="detail-layout" hidden>
+
+      <!-- Left Column: Details -->
+      <div class="detail-main">
+
+        <!-- Package Header -->
+        <div class="detail-header" style="margin-bottom: var(--sp-6);">
+          <div class="flex gap-2" style="margin-bottom: var(--sp-2); align-items: center;">
+            <span id="pkg-category-badge" class="badge badge-active">Category</span>
+            <span id="pkg-status-badge" class="badge" hidden>Status</span>
+          </div>
+          <h1 id="pkg-title" style="margin-bottom: var(--sp-2);">Package Title</h1>
+          <div class="flex flex-wrap gap-4 text-muted text-sm" style="align-items: center;">
+            <span id="pkg-destination">📍 Destination</span>
+            <span id="pkg-duration">🗓 0 Days</span>
+            <span id="pkg-rating">⭐ 0.0 (0 reviews)</span>
+          </div>
+        </div>
+
+        <!-- Banner Image -->
+        <div class="card" style="margin-bottom: var(--sp-8); overflow: hidden;">
+          <img id="pkg-image" class="detail-banner-img" src="" alt="Package image" hidden>
+          <div id="pkg-image-placeholder" class="pkg-card-img-placeholder" style="height: 380px;">🏔️</div>
+        </div>
+
+        <!-- Overview & Specs -->
+        <section class="card" style="padding: var(--sp-6); margin-bottom: var(--sp-8);" aria-labelledby="overview-heading">
+          <h2 id="overview-heading" class="section-title" style="font-size: var(--text-xl); margin-bottom: var(--sp-4);">Overview</h2>
+          <p id="pkg-description" style="line-height: var(--leading); margin-bottom: var(--sp-6);"></p>
+
+          <div class="grid grid-3" style="gap: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--color-border-light);">
+            <div class="spec-item">
+              <span class="text-muted text-xs font-semi" style="text-transform: uppercase;">Duration</span>
+              <p id="spec-duration" class="font-semi" style="margin-bottom: 0;">-</p>
+            </div>
+            <div class="spec-item">
+              <span class="text-muted text-xs font-semi" style="text-transform: uppercase;">Max Capacity</span>
+              <p id="spec-capacity" class="font-semi" style="margin-bottom: 0;">-</p>
+            </div>
+            <div class="spec-item">
+              <span class="text-muted text-xs font-semi" style="text-transform: uppercase;">Tour Operator</span>
+              <p id="spec-provider" class="font-semi" style="margin-bottom: 0;">-</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Destination Info -->
+        <section id="pkg-dest-section" class="card" style="padding: var(--sp-6); margin-bottom: var(--sp-8);" aria-labelledby="destination-heading">
+          <h2 id="destination-heading" class="section-title" style="font-size: var(--text-xl); margin-bottom: var(--sp-2);">About the Destination</h2>
+          <h3 id="pkg-dest-name" style="font-size: var(--text-base); color: var(--color-primary); margin-bottom: var(--sp-2);"></h3>
+          <p id="pkg-dest-desc" class="text-muted" style="margin-bottom: 0;"></p>
+        </section>
+
+        <!-- Day-wise Itinerary -->
+        <section id="pkg-itinerary-section" class="card" style="padding: var(--sp-6); margin-bottom: var(--sp-8);" aria-labelledby="itinerary-heading">
+          <h2 id="itinerary-heading" class="section-title" style="font-size: var(--text-xl); margin-bottom: var(--sp-4);">Day-wise Itinerary</h2>
+          <div id="pkg-itinerary-list">
+            <!-- Populated dynamically -->
+          </div>
+        </section>
+
+        <!-- Inclusions & Exclusions -->
+        <section class="grid grid-2" style="gap: var(--sp-6); margin-bottom: var(--sp-8);" aria-labelledby="inclusions-heading">
+          <!-- Inclusions -->
+          <div class="card" style="padding: var(--sp-6); border-top: 4px solid var(--color-success);">
+            <h3 id="inclusions-heading" style="font-size: var(--text-lg); margin-bottom: var(--sp-4); color: var(--color-success);">
+              ✓ What's Included
+            </h3>
+            <ul id="pkg-inclusions-list" style="display: flex; flex-direction: column; gap: var(--sp-2);">
+              <!-- Inclusions items -->
+            </ul>
+          </div>
+
+          <!-- Exclusions -->
+          <div class="card" style="padding: var(--sp-6); border-top: 4px solid var(--color-danger);">
+            <h3 id="exclusions-heading" style="font-size: var(--text-lg); margin-bottom: var(--sp-4); color: var(--color-danger);">
+              ✕ What's Excluded
+            </h3>
+            <ul id="pkg-exclusions-list" style="display: flex; flex-direction: column; gap: var(--sp-2);">
+              <!-- Exclusions items -->
+            </ul>
+          </div>
+        </section>
+
+        <!-- Upcoming Available Dates Table -->
+        <section class="card" style="padding: var(--sp-6); margin-bottom: var(--sp-8);" aria-labelledby="dates-heading">
+          <h2 id="dates-heading" class="section-title" style="font-size: var(--text-xl); margin-bottom: var(--sp-4);">Upcoming Departures & Availability</h2>
+          <div id="pkg-dates-container">
+            <!-- Populated dynamically: table or empty state -->
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Right Column: Booking Sidebar -->
+      <aside class="detail-sidebar">
+        <div id="booking-card" class="card" style="padding: var(--sp-6); box-shadow: var(--shadow);">
+
+          <!-- Price Header -->
+          <div style="margin-bottom: var(--sp-5); padding-bottom: var(--sp-4); border-bottom: 1px solid var(--color-border-light);">
+            <div class="flex" style="gap: var(--sp-2); align-items: baseline;">
+              <span id="booking-card-price" class="font-bold" style="font-size: var(--text-3xl); color: var(--color-primary);">₹0</span>
+              <span class="text-muted text-sm">/ person</span>
+            </div>
+          </div>
+
+          <!-- Booking Form -->
+          <form id="booking-form" novalidate>
+            <!-- Date Selector -->
+            <div class="field" style="margin-bottom: var(--sp-4);">
+              <label class="field-label" for="booking-date">
+                Departure Date <span class="required">*</span>
+              </label>
+              <select id="booking-date" name="availability_id" class="field-select" required>
+                <option value="">Select departure date</option>
+              </select>
+              <p id="booking-date-hint" class="field-hint"></p>
+              <p id="booking-date-error" class="field-error"></p>
+            </div>
+
+            <!-- Traveler Count -->
+            <div class="field" style="margin-bottom: var(--sp-5);">
+              <label class="field-label" for="booking-travelers">
+                Number of Travelers <span class="required">*</span>
+              </label>
+              <input type="number" id="booking-travelers" name="travelers" class="field-input" min="1" max="10" value="1" required inputmode="numeric">
+              <p id="booking-travelers-hint" class="field-hint">Max 10 travelers per booking</p>
+              <p id="booking-travelers-error" class="field-error"></p>
+            </div>
+
+            <!-- Live Price Summary -->
+            <div class="booking-summary" style="background: var(--color-bg); padding: var(--sp-4); border-radius: var(--radius); margin-bottom: var(--sp-5);">
+              <div class="flex flex-between text-sm" style="margin-bottom: var(--sp-2);">
+                <span class="text-muted">Price per person</span>
+                <span id="summary-unit-price">-</span>
+              </div>
+              <div class="flex flex-between text-sm" style="margin-bottom: var(--sp-2);">
+                <span class="text-muted">Travelers</span>
+                <span id="summary-count">1</span>
+              </div>
+              <hr style="margin: var(--sp-2) 0;">
+              <div class="flex flex-between font-semi" style="font-size: var(--text-base);">
+                <span>Total Price</span>
+                <span id="summary-total" style="color: var(--color-primary);">₹0</span>
+              </div>
+            </div>
+
+            <!-- Auth Status & Booking Action Button Area -->
+            <div id="booking-action-container">
+              <!-- Dynamically populated based on Auth state -->
+            </div>
+
+            <!-- Form Error Display -->
+            <div id="booking-form-error" class="alert alert-error" style="margin-top: var(--sp-4);" hidden>
+              <span class="alert-icon" aria-hidden="true">⚠️</span>
+              <div class="alert-body">
+                <p id="booking-error-text" style="margin-bottom: 0;"></p>
+              </div>
+            </div>
+          </form>
+
+          <!-- Booking Success State (Shown after successful booking) -->
+          <div id="booking-success" hidden>
+            <div style="text-align: center; margin-bottom: var(--sp-5);">
+              <div style="width: 52px; height: 52px; background: var(--color-success-light); color: var(--color-success); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin: 0 auto var(--sp-3);">✓</div>
+              <h3 style="color: var(--color-success); margin-bottom: var(--sp-1);">Booking Confirmed!</h3>
+              <p class="text-muted text-sm">Your reservation has been created.</p>
+            </div>
+
+            <div class="card" style="background: var(--color-bg); padding: var(--sp-4); margin-bottom: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-2);">
+              <div class="flex flex-between text-sm">
+                <span class="text-muted">Booking Reference</span>
+                <span id="success-booking-id" class="font-semi">#0</span>
+              </div>
+              <div class="flex flex-between text-sm">
+                <span class="text-muted">Package</span>
+                <span id="success-pkg-title" class="font-semi truncate" style="max-width: 150px;">-</span>
+              </div>
+              <div class="flex flex-between text-sm">
+                <span class="text-muted">Travel Date</span>
+                <span id="success-date" class="font-semi">-</span>
+              </div>
+              <div class="flex flex-between text-sm">
+                <span class="text-muted">Travelers</span>
+                <span id="success-travelers" class="font-semi">-</span>
+              </div>
+              <div class="flex flex-between text-sm">
+                <span class="text-muted">Total Amount</span>
+                <span id="success-amount" class="font-semi" style="color: var(--color-primary);">-</span>
+              </div>
+              <div class="flex flex-between text-sm">
+                <span class="text-muted">Booking Status</span>
+                <span id="success-status" class="badge badge-active">PENDING</span>
+              </div>
+              <div class="flex flex-between text-sm">
+                <span class="text-muted">Payment Status</span>
+                <span id="success-payment" class="badge badge-pending">UNPAID</span>
+              </div>
+            </div>
+
+            <div class="alert alert-info" style="margin-bottom: var(--sp-5); font-size: var(--text-xs);">
+              <span class="alert-icon" aria-hidden="true">ℹ</span>
+              <div class="alert-body">
+                Payment and confirmation can be managed in your customer bookings page.
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: var(--sp-2);">
+              <a href="/customer-bookings.html" class="btn btn-primary btn-block">View My Bookings</a>
+              <a href="/packages.html" class="btn btn-secondary btn-block">Browse More Packages</a>
+            </div>
+          </div>
+
+        </div>
+      </aside>
+
+    </div>
+
+  </main>
+
+  <!-- Footer filled by layout.js -->
+  <footer id="site-footer"></footer>
+
+  <!-- Foundation scripts — order matters -->
+  <script src="/js/api.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+
+  <!-- Page-specific script -->
+  <script src="/js/pages/package-detail.js"></script>
+
+</body>
+</html>
