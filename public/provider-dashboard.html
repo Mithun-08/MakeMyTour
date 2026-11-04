@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Provider Dashboard | MakeMyTour</title>
+  <meta name="description" content="Manage tour packages, itineraries, departures, and track moderation status on MakeMyTour.">
+
+  <!-- Shared stylesheet -->
+  <link rel="stylesheet" href="/css/style.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* Provider dashboard custom enhancements */
+    .dashboard-header {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-4);
+      margin-bottom: var(--sp-6);
+    }
+    @media (min-width: 600px) {
+      .dashboard-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--sp-4);
+      margin-bottom: var(--sp-6);
+    }
+    @media (min-width: 768px) {
+      .stats-grid {
+        grid-template-columns: repeat(5, 1fr);
+      }
+    }
+
+    .stat-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      padding: var(--sp-4);
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
+      transition: border-color var(--transition), transform var(--transition);
+    }
+    .stat-card:hover {
+      border-color: var(--color-primary);
+      transform: translateY(-2px);
+    }
+    .stat-card.active {
+      border-color: var(--color-primary);
+      background: var(--color-primary-light);
+    }
+    .stat-label {
+      font-size: var(--text-xs);
+      font-weight: var(--font-semi);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--color-text-muted);
+      margin-bottom: var(--sp-1);
+    }
+    .stat-value {
+      font-size: var(--text-3xl);
+      font-weight: var(--font-bold);
+      color: var(--color-text);
+      line-height: 1.1;
+    }
+
+    /* Modal wide for multi-day itineraries */
+    .modal-wide {
+      max-width: 760px;
+    }
+
+    .itinerary-item, .availability-item {
+      background: var(--color-bg);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius);
+      padding: var(--sp-4);
+      margin-bottom: var(--sp-3);
+      position: relative;
+    }
+
+    .item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--sp-3);
+    }
+
+    .action-btn-group {
+      display: inline-flex;
+      gap: var(--sp-1);
+      flex-wrap: wrap;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+      font-size: var(--text-sm);
+      margin-bottom: var(--sp-4);
+      color: var(--color-text-muted);
+    }
+    .breadcrumb a {
+      color: var(--color-text-muted);
+    }
+    .breadcrumb a:hover {
+      color: var(--color-primary);
+    }
+
+    .thumbnail-tiny {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+      background: var(--color-primary-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-sm);
+      color: var(--color-primary);
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Site header rendered by layout.js -->
+  <header id="site-header"></header>
+
+  <main id="app" class="container" style="padding-top: var(--sp-6); padding-bottom: var(--sp-16);">
+
+    <!-- Breadcrumb -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/index.html">Home</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page" style="color: var(--color-text);">Provider Dashboard</span>
+    </nav>
+
+    <!-- Header section -->
+    <div class="dashboard-header">
+      <div>
+        <h1 id="dashboard-title">Provider Dashboard</h1>
+        <p class="text-muted">Manage your tour packages, itineraries, and monitor admin moderation.</p>
+      </div>
+      <div>
+        <button id="btn-open-create-modal" type="button" class="btn btn-primary" aria-haspopup="dialog">
+          + Create New Package
+        </button>
+      </div>
+    </div>
+
+    <!-- Metrics Cards -->
+    <section aria-label="Package statistics" class="stats-grid">
+      <div class="stat-card" id="card-stat-all" data-status="" role="button" tabindex="0" title="Filter all packages">
+        <span class="stat-label">Total Packages</span>
+        <span class="stat-value" id="stat-total">0</span>
+      </div>
+      <div class="stat-card" id="card-stat-approved" data-status="APPROVED" role="button" tabindex="0" title="Filter approved packages">
+        <span class="stat-label" style="color: var(--color-success);">Approved</span>
+        <span class="stat-value" id="stat-approved">0</span>
+      </div>
+      <div class="stat-card" id="card-stat-pending" data-status="PENDING" role="button" tabindex="0" title="Filter pending moderation packages">
+        <span class="stat-label" style="color: var(--color-warning);">Pending Review</span>
+        <span class="stat-value" id="stat-pending">0</span>
+      </div>
+      <div class="stat-card" id="card-stat-disabled" data-status="DISABLED" role="button" tabindex="0" title="Filter disabled packages">
+        <span class="stat-label" style="color: var(--color-text-muted);">Disabled</span>
+        <span class="stat-value" id="stat-disabled">0</span>
+      </div>
+      <div class="stat-card" id="card-stat-rejected" data-status="REJECTED" role="button" tabindex="0" title="Filter rejected packages">
+        <span class="stat-label" style="color: var(--color-danger);">Rejected</span>
+        <span class="stat-value" id="stat-rejected">0</span>
+      </div>
+    </section>
+
+    <!-- Controls: Search and Status Filter -->
+    <div class="card" style="padding: var(--sp-4); margin-bottom: var(--sp-6);">
+      <form id="provider-filter-form" class="filter-row" role="search" aria-label="Filter packages" onsubmit="return false;">
+        <div class="field" style="flex: 2; min-width: 220px;">
+          <label class="field-label" for="pkg-search-input">Search Packages</label>
+          <input type="search" id="pkg-search-input" class="field-input" placeholder="Search by title, destination, category..." autocomplete="off">
+        </div>
+
+        <div class="field" style="flex: 1; min-width: 160px;">
+          <label class="field-label" for="pkg-status-filter">Filter by Status</label>
+          <select id="pkg-status-filter" class="field-select">
+            <option value="">All Statuses</option>
+            <option value="APPROVED">Approved</option>
+            <option value="PENDING">Pending Review</option>
+            <option value="DISABLED">Disabled</option>
+            <option value="REJECTED">Rejected</option>
+          </select>
+        </div>
+
+        <div style="display: flex; gap: var(--sp-2); align-self: flex-end;">
+          <button type="submit" id="btn-filter-apply" class="btn btn-secondary">Search</button>
+          <button type="button" id="btn-filter-reset" class="btn btn-ghost">Reset</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Package list section -->
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--sp-3);">
+      <h2 style="font-size: var(--text-xl);">My Packages</h2>
+      <span id="pkg-result-count" class="text-sm text-muted">Showing 0 packages</span>
+    </div>
+
+    <!-- Table Container -->
+    <div id="pkg-table-container">
+      <div class="table-wrapper">
+        <table class="table" id="pkg-table" aria-label="Provider Packages">
+          <thead>
+            <tr>
+              <th scope="col" style="min-width: 240px;">Package</th>
+              <th scope="col">Destination</th>
+              <th scope="col">Category</th>
+              <th scope="col">Duration</th>
+              <th scope="col">Price</th>
+              <th scope="col">Bookings & Rating</th>
+              <th scope="col">Status</th>
+              <th scope="col">Created</th>
+              <th scope="col" style="text-align: right; min-width: 170px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="pkg-tbody">
+            <!-- Rows injected by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div id="pkg-pagination"></div>
+
+  </main>
+
+  <!-- Create / Edit Package Modal -->
+  <div id="pkg-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="modal-pkg-heading">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-pkg-heading">Create Tour Package</h2>
+        <button type="button" class="modal-close" id="btn-close-modal" aria-label="Close dialog">×</button>
+      </div>
+
+      <form id="package-form" novalidate>
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+          <input type="hidden" id="form-pkg-id" name="package_id" value="">
+
+          <!-- Error Alert Banner -->
+          <div id="form-error-alert" class="alert alert-error" hidden style="margin-bottom: var(--sp-4);">
+            <span class="alert-icon" aria-hidden="true">⚠️</span>
+            <div class="alert-body">
+              <p class="alert-title">Submission Error</p>
+              <p id="form-error-text"></p>
+            </div>
+          </div>
+
+          <!-- Section: Basic Information -->
+          <fieldset class="form-section" style="margin-bottom: var(--sp-5);">
+            <legend class="form-section-title">Basic Details</legend>
+
+            <div class="field" style="margin-bottom: var(--sp-3);">
+              <label class="field-label" for="form-title">Package Title <span class="required">*</span></label>
+              <input type="text" id="form-title" name="title" class="field-input" placeholder="e.g. Majestic Himalayan Expedition" maxlength="200" required>
+              <span class="field-error"></span>
+            </div>
+
+            <div class="form-row" style="margin-bottom: var(--sp-3);">
+              <div class="field">
+                <label class="field-label" for="form-destination">Destination <span class="required">*</span></label>
+                <select id="form-destination" name="destination_id" class="field-select" required>
+                  <option value="">Select destination...</option>
+                </select>
+                <span class="field-error"></span>
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="form-category">Category <span class="required">*</span></label>
+                <select id="form-category" name="category_id" class="field-select" required>
+                  <option value="">Select category...</option>
+                </select>
+                <span class="field-error"></span>
+              </div>
+            </div>
+
+            <div class="form-row" style="margin-bottom: var(--sp-3);">
+              <div class="field">
+                <label class="field-label" for="form-price">Price per Person (₹) <span class="required">*</span></label>
+                <input type="number" id="form-price" name="price" class="field-input" min="0" step="1" placeholder="e.g. 15000" required>
+                <span class="field-error"></span>
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="form-duration">Duration (Days) <span class="required">*</span></label>
+                <input type="number" id="form-duration" name="duration_days" class="field-input" min="1" step="1" placeholder="e.g. 5" required>
+                <span class="field-error"></span>
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="form-capacity">Capacity (Max Travelers) <span class="required">*</span></label>
+                <input type="number" id="form-capacity" name="capacity" class="field-input" min="1" step="1" placeholder="e.g. 20" required>
+                <span class="field-error"></span>
+              </div>
+            </div>
+
+            <div class="field" style="margin-bottom: var(--sp-3);">
+              <label class="field-label" for="form-image">Image URL / Path</label>
+              <input type="text" id="form-image" name="image" class="field-input" placeholder="e.g. /images/packages/himalaya.jpg" maxlength="255">
+              <span class="field-hint">Optional image for package banner (max 255 chars).</span>
+              <span class="field-error"></span>
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="form-description">Description</label>
+              <textarea id="form-description" name="description" class="field-textarea" placeholder="Detailed package overview, highlights and experience..." rows="3"></textarea>
+              <span class="field-error"></span>
+            </div>
+          </fieldset>
+
+          <!-- Section: Inclusions & Exclusions -->
+          <fieldset class="form-section" style="margin-bottom: var(--sp-5);">
+            <legend class="form-section-title">Inclusions & Exclusions</legend>
+            <div class="form-row">
+              <div class="field">
+                <label class="field-label" for="form-inclusions">Inclusions (one per line)</label>
+                <textarea id="form-inclusions" name="inclusions" class="field-textarea" placeholder="Accommodation&#10;Daily breakfast&#10;Local transport&#10;Sightseeing guide" rows="4"></textarea>
+                <span class="field-hint">List each included item on a new line.</span>
+              </div>
+
+              <div class="field">
+                <label class="field-label" for="form-exclusions">Exclusions (one per line)</label>
+                <textarea id="form-exclusions" name="exclusions" class="field-textarea" placeholder="Airfare&#10;Personal expenses&#10;Entry monuments fee&#10;Travel insurance" rows="4"></textarea>
+                <span class="field-hint">List each excluded item on a new line.</span>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Section: Itinerary Builder -->
+          <fieldset class="form-section" style="margin-bottom: var(--sp-5);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-4);">
+              <legend class="form-section-title" style="margin-bottom: 0;">Day-by-Day Itinerary</legend>
+              <button type="button" id="btn-add-day" class="btn btn-secondary btn-sm">+ Add Day</button>
+            </div>
+            <p class="field-hint" style="margin-bottom: var(--sp-3);">Add day-wise schedules describing daily destinations and activities.</p>
+            <div id="itinerary-list">
+              <!-- Dynamic day rows inserted here -->
+            </div>
+          </fieldset>
+
+          <!-- Section: Initial Availability (Only shown for Create) -->
+          <fieldset id="section-availability" class="form-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-4);">
+              <legend class="form-section-title" style="margin-bottom: 0;">Initial Departure Dates</legend>
+              <button type="button" id="btn-add-avail-date" class="btn btn-secondary btn-sm">+ Add Date</button>
+            </div>
+            <p class="field-hint" style="margin-bottom: var(--sp-3);">
+              Optional initial departure dates with available seats. Once created, package starts as PENDING until approved by admin.
+            </p>
+            <div id="availability-list">
+              <!-- Dynamic date rows inserted here -->
+            </div>
+          </fieldset>
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btn-cancel-modal" class="btn btn-ghost">Cancel</button>
+          <button type="submit" id="btn-save-package" class="btn btn-primary">Save Package</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- View Package Modal -->
+  <div id="view-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="view-modal-title">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2 class="modal-title" id="view-modal-title">Package Details</h2>
+        <button type="button" class="modal-close" id="btn-close-view-modal" aria-label="Close dialog">×</button>
+      </div>
+      <div class="modal-body" id="view-modal-body" style="max-height: 70vh; overflow-y: auto;">
+        <!-- Injected by JavaScript -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-dismiss-view-modal" class="btn btn-ghost">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Site footer rendered by layout.js -->
+  <footer id="site-footer"></footer>
+
+  <!-- Foundation scripts — order matters -->
+  <script src="/js/api.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+
+  <!-- Page script -->
+  <script src="/js/pages/provider-dashboard.js"></script>
+
+</body>
+</html>
+
