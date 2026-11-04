@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Booking Details | MakeMyTour — Local Tourism Package Booking</title>
+  <meta name="description" content="View comprehensive tour booking information, manage payments, cancel reservations, or leave a review.">
+
+  <!-- Shared stylesheet -->
+  <link rel="stylesheet" href="/css/style.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* Booking Detail Layout Styles */
+    .detail-header {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-3);
+      margin-bottom: var(--sp-6);
+      padding-bottom: var(--sp-5);
+      border-bottom: 1px solid var(--color-border-light);
+    }
+    @media (min-width: 768px) {
+      .detail-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+      font-size: var(--text-sm);
+      margin-bottom: var(--sp-3);
+      color: var(--color-text-muted);
+    }
+    .breadcrumb a {
+      color: var(--color-text-muted);
+      text-decoration: none;
+    }
+    .breadcrumb a:hover {
+      color: var(--color-primary);
+      text-decoration: underline;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--sp-6);
+      align-items: start;
+    }
+    @media (min-width: 960px) {
+      .detail-grid {
+        grid-template-columns: 1.8fr 1.2fr;
+      }
+    }
+
+    .detail-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      padding: var(--sp-6);
+      margin-bottom: var(--sp-6);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .detail-card-title {
+      font-size: var(--text-lg);
+      font-weight: var(--font-semi);
+      margin-bottom: var(--sp-4);
+      padding-bottom: var(--sp-3);
+      border-bottom: 1px solid var(--color-border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .detail-package-hero {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-4);
+      margin-bottom: var(--sp-4);
+    }
+    @media (min-width: 600px) {
+      .detail-package-hero {
+        flex-direction: row;
+      }
+    }
+
+    .detail-package-thumb {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      border-radius: var(--radius-md);
+      background: var(--color-surface-sunken);
+      border: 1px solid var(--color-border-light);
+    }
+    @media (min-width: 600px) {
+      .detail-package-thumb {
+        width: 220px;
+        height: 150px;
+        flex-shrink: 0;
+      }
+    }
+
+    .info-list {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--sp-4);
+    }
+    @media (min-width: 600px) {
+      .info-list {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-1);
+    }
+    .info-label {
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: var(--font-semi);
+    }
+    .info-value {
+      font-size: var(--text-base);
+      font-weight: var(--font-normal);
+      color: var(--color-text);
+      word-break: break-word;
+    }
+    .info-value strong {
+      font-weight: var(--font-semi);
+    }
+
+    .price-breakdown-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: var(--sp-3);
+      font-size: var(--text-sm);
+    }
+    .price-breakdown-table tr td {
+      padding: var(--sp-2) 0;
+      color: var(--color-text);
+    }
+    .price-breakdown-table tr td:last-child {
+      text-align: right;
+    }
+    .price-breakdown-table .total-row td {
+      border-top: 1px solid var(--color-border-light);
+      padding-top: var(--sp-3);
+      font-size: var(--text-base);
+      font-weight: var(--font-semi);
+    }
+
+    /* Payment method option selector */
+    .payment-options-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-2);
+      margin-bottom: var(--sp-4);
+    }
+    .payment-option-label {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-3);
+      padding: var(--sp-3) var(--sp-4);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      background: var(--color-surface);
+      transition: border-color var(--transition), background var(--transition);
+    }
+    .payment-option-label:hover {
+      border-color: var(--color-border-hover);
+      background: var(--color-surface-sunken);
+    }
+    .payment-option-label input[type="radio"]:checked + .payment-option-info {
+      font-weight: var(--font-semi);
+    }
+
+    /* Star rating widget in modal */
+    .star-rating-widget {
+      display: flex;
+      flex-direction: row-reverse;
+      justify-content: flex-end;
+      gap: var(--sp-2);
+      margin-bottom: var(--sp-2);
+    }
+    .star-rating-widget input[type="radio"] {
+      display: none;
+    }
+    .star-rating-widget label {
+      font-size: 2rem;
+      color: var(--color-border-hover);
+      cursor: pointer;
+      transition: color var(--transition);
+      line-height: 1;
+    }
+    .star-rating-widget label:hover,
+    .star-rating-widget label:hover ~ label,
+    .star-rating-widget input[type="radio"]:checked ~ label {
+      color: #f59e0b; /* Amber star color */
+    }
+
+    .status-tag-row {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+      flex-wrap: wrap;
+    }
+
+    .badge-unpaid {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .badge-paid {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .badge-refunded {
+      background: #e0e7ff;
+      color: #3730a3;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Site header rendered by layout.js -->
+  <header id="site-header"></header>
+
+  <!-- Main Content Container -->
+  <main id="app" class="container" style="padding-top: var(--sp-6); padding-bottom: var(--sp-16);" aria-busy="false">
+
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/index.html">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/customer-dashboard.html">Dashboard</a>
+      <span aria-hidden="true">/</span>
+      <a href="/customer-bookings.html">My Bookings</a>
+      <span aria-hidden="true">/</span>
+      <span id="breadcrumb-booking-id" aria-current="page">Booking Details</span>
+    </nav>
+
+    <!-- 1. Loading State Block -->
+    <div id="detail-loading" class="state-box state-loading" aria-live="polite">
+      <div class="state-box-icon" aria-hidden="true">⏳</div>
+      <div class="state-box-title">Loading booking details…</div>
+      <div class="state-box-body">Please wait while we retrieve your reservation details.</div>
+    </div>
+
+    <!-- 2. Error State Block -->
+    <div id="detail-error" class="state-box state-error" hidden role="alert">
+      <div class="state-box-icon" aria-hidden="true">⚠️</div>
+      <div class="state-box-title">Unable to load booking</div>
+      <div class="state-box-body" id="detail-error-msg">Something went wrong while retrieving your booking details.</div>
+      <div style="display: flex; gap: var(--sp-3); margin-top: var(--sp-4);">
+        <button type="button" class="btn btn-secondary" id="btn-retry-detail">Try Again</button>
+        <a href="/customer-bookings.html" class="btn btn-ghost">Back to My Bookings</a>
+      </div>
+    </div>
+
+    <!-- 3. Main Detail Content (Populated by JavaScript Controller) -->
+    <div id="detail-content" hidden>
+
+      <!-- Page Header: Booking ID, Statuses, and Quick Actions -->
+      <div class="detail-header">
+        <div>
+          <h1 id="detail-booking-heading" style="margin-bottom: var(--sp-2);">Booking Details</h1>
+          <div class="status-tag-row">
+            <span class="text-sm text-muted">Reference: <strong id="detail-booking-id-text">#—</strong></span>
+            <span aria-hidden="true" class="text-muted">•</span>
+            <span id="detail-booking-status-badge"></span>
+            <span id="detail-payment-status-badge"></span>
+          </div>
+        </div>
+        <div style="display: flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap;">
+          <a href="/customer-dashboard.html" class="btn btn-ghost btn-sm" id="btn-back-to-dashboard">
+            Dashboard
+          </a>
+          <a href="/customer-bookings.html" class="btn btn-secondary btn-sm" id="btn-back-to-bookings">
+            « Back to Bookings
+          </a>
+          <button type="button" class="btn btn-sm btn-ghost" id="btn-print-booking">
+            🖨️ Print
+          </button>
+        </div>
+      </div>
+
+      <!-- Detail Grid: Left (Package, Travel, Customer/Provider, Review) & Right (Summary, Payment, Actions) -->
+      <div class="detail-grid">
+
+        <!-- LEFT COLUMN: Comprehensive Booking Details -->
+        <div class="detail-main-col">
+
+          <!-- Section A: Tour Package Overview -->
+          <section class="detail-card" aria-labelledby="heading-package-info">
+            <h2 class="detail-card-title" id="heading-package-info">Tour Package Information</h2>
+            <div class="detail-package-hero">
+              <img id="detail-package-image" class="detail-package-thumb" src="/images/placeholder.jpg" alt="Tour package image">
+              <div style="flex: 1;">
+                <h3 style="margin-bottom: var(--sp-2); font-size: var(--text-lg);">
+                  <a id="detail-package-link" href="#" style="color: var(--color-text); text-decoration: none;">
+                    <span id="detail-package-title">Tour Package Title</span>
+                  </a>
+                </h3>
+                <div style="display: flex; gap: var(--sp-3); margin-bottom: var(--sp-3); font-size: var(--text-sm); color: var(--color-text-muted);">
+                  <span>⏱️ <strong id="detail-package-duration">—</strong> days</span>
+                  <span>💰 <strong id="detail-package-price">—</strong> / person</span>
+                </div>
+                <p id="detail-package-description" class="text-sm text-muted" style="line-height: 1.6; margin: 0;">
+                  Package description goes here.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Section B: Travel Date, Schedule & Reservation Info -->
+          <section class="detail-card" aria-labelledby="heading-schedule-info">
+            <h2 class="detail-card-title" id="heading-schedule-info">Travel & Schedule</h2>
+            <div class="info-list">
+              <div class="info-item">
+                <span class="info-label">Departure / Travel Date</span>
+                <span class="info-value" id="detail-available-date"><strong>—</strong></span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Number of Travelers</span>
+                <span class="info-value" id="detail-travelers"><strong>—</strong></span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Booking Placed On</span>
+                <span class="info-value" id="detail-booked-at">—</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Seats Allocation</span>
+                <span class="info-value" id="detail-seats-info">Reserved</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Section C: Customer and Provider Information -->
+          <section class="detail-card" aria-labelledby="heading-contact-info">
+            <h2 class="detail-card-title" id="heading-contact-info">Contacts & Parties</h2>
+            <div class="info-list">
+              <!-- Customer Party Info -->
+              <div class="info-item" style="border-right: 1px solid var(--color-border-light); padding-right: var(--sp-4);">
+                <span class="info-label" style="color: var(--color-primary);">Lead Traveler (You)</span>
+                <span class="info-value"><strong id="detail-customer-name">—</strong></span>
+                <span class="info-value text-sm text-muted" id="detail-customer-email">—</span>
+                <span class="info-value text-sm text-muted" id="detail-customer-mobile">—</span>
+              </div>
+              <!-- Tour Provider Info -->
+              <div class="info-item">
+                <span class="info-label" style="color: var(--color-primary);">Tour Operator / Provider</span>
+                <span class="info-value"><strong id="detail-provider-name">—</strong></span>
+                <span class="info-value text-sm text-muted" id="detail-provider-email">—</span>
+                <span class="info-value text-sm text-muted" id="detail-provider-mobile">—</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Section D: Existing Review Block (Visible only if review has been submitted) -->
+          <section class="detail-card" id="existing-review-section" hidden aria-labelledby="heading-review-info">
+            <h2 class="detail-card-title" id="heading-review-info">
+              <span>Your Review</span>
+              <span id="detail-review-rating" style="color: #f59e0b; font-size: var(--text-base);">★★★★★</span>
+            </h2>
+            <p id="detail-review-comment" class="text-sm" style="font-style: italic; margin-bottom: var(--sp-2); line-height: 1.6;">
+              "Great experience!"
+            </p>
+            <span id="detail-review-date" class="text-xs text-muted">Submitted on —</span>
+          </section>
+
+        </div>
+
+        <!-- RIGHT COLUMN: Price Breakdown, Payment Card, Actions -->
+        <div class="detail-sidebar-col">
+
+          <!-- Section E: Price Breakdown & Payment Status -->
+          <div class="detail-card" aria-labelledby="heading-pricing-info">
+            <h2 class="detail-card-title" id="heading-pricing-info">Fare & Payment Summary</h2>
+
+            <table class="price-breakdown-table">
+              <tbody>
+                <tr>
+                  <td>Package Rate</td>
+                  <td id="detail-rate-breakdown">₹0.00</td>
+                </tr>
+                <tr>
+                  <td>Travelers Count</td>
+                  <td id="detail-travelers-breakdown">× 1</td>
+                </tr>
+                <tr>
+                  <td>Taxes & Fees</td>
+                  <td>Included</td>
+                </tr>
+                <tr class="total-row">
+                  <td><strong>Total Payable</strong></td>
+                  <td><strong id="detail-total-amount" style="color: var(--color-primary); font-size: var(--text-lg);">₹0.00</strong></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style="margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--color-border-light);">
+              <div class="info-item">
+                <span class="info-label">Payment Status</span>
+                <div id="detail-sidebar-payment-badge" style="margin-top: var(--sp-1);">
+                  <!-- Payment status badge rendered here -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Paid details block (shown when payment_status === 'PAID') -->
+            <div id="detail-paid-info" hidden style="margin-top: var(--sp-4); background: var(--color-surface-sunken); padding: var(--sp-3); border-radius: var(--radius-md); font-size: var(--text-xs); color: var(--color-text-muted);">
+              <div>Payment ID: <strong id="detail-payment-id">—</strong></div>
+              <div>Paid At: <strong id="detail-paid-at">—</strong></div>
+              <div>Method: <strong id="detail-paid-method">—</strong></div>
+            </div>
+          </div>
+
+          <!-- Section F: Payment Form Section (Visible only when payment_status === 'UNPAID' and not CANCELLED) -->
+          <div class="detail-card" id="payment-section" hidden aria-labelledby="heading-payment-form">
+            <h2 class="detail-card-title" id="heading-payment-form">Complete Payment</h2>
+
+            <!-- Payment Error Alert -->
+            <div id="payment-error-alert" class="alert alert-error" hidden style="margin-bottom: var(--sp-3);" role="alert">
+              <span class="alert-icon" aria-hidden="true">⚠️</span>
+              <div class="alert-body">
+                <p id="payment-error-text">Failed to process payment.</p>
+              </div>
+            </div>
+
+            <form id="payment-form" novalidate>
+              <p class="text-sm text-muted" style="margin-bottom: var(--sp-3);">
+                Select your preferred payment method to confirm and pay for this reservation:
+              </p>
+
+              <!-- Payment Method Selector (UPI, CARD, NETBANKING, CASH) -->
+              <div class="payment-options-group" role="radiogroup" aria-label="Select payment method">
+
+                <label class="payment-option-label" for="pay-method-upi">
+                  <input type="radio" id="pay-method-upi" name="payment_method" value="UPI" checked>
+                  <div class="payment-option-info">
+                    <div>📱 UPI / QR Code</div>
+                    <div class="text-xs text-muted">Google Pay, PhonePe, Paytm, BHIM</div>
+                  </div>
+                </label>
+
+                <label class="payment-option-label" for="pay-method-card">
+                  <input type="radio" id="pay-method-card" name="payment_method" value="CARD">
+                  <div class="payment-option-info">
+                    <div>💳 Debit / Credit Card</div>
+                    <div class="text-xs text-muted">Visa, Mastercard, RuPay</div>
+                  </div>
+                </label>
+
+                <label class="payment-option-label" for="pay-method-netbanking">
+                  <input type="radio" id="pay-method-netbanking" name="payment_method" value="NETBANKING">
+                  <div class="payment-option-info">
+                    <div>🏦 Net Banking</div>
+                    <div class="text-xs text-muted">All major Indian banks supported</div>
+                  </div>
+                </label>
+
+                <label class="payment-option-label" for="pay-method-cash">
+                  <input type="radio" id="pay-method-cash" name="payment_method" value="CASH">
+                  <div class="payment-option-info">
+                    <div>💵 Pay on Arrival / Cash</div>
+                    <div class="text-xs text-muted">Direct settlement with tour operator</div>
+                  </div>
+                </label>
+
+              </div>
+
+              <button type="submit" class="btn btn-primary" id="btn-pay-now" style="width: 100%; justify-content: center; font-size: var(--text-base); padding: var(--sp-3);">
+                Pay Now (<span id="pay-amount-display">₹0.00</span>)
+              </button>
+
+              <div class="text-xs text-muted text-center" style="margin-top: var(--sp-2);">
+                🔒 256-bit encrypted secure transaction
+              </div>
+            </form>
+          </div>
+
+          <!-- Section G: Contextual Action Buttons (Cancel / Review) -->
+          <div class="detail-card" id="actions-section" aria-labelledby="heading-booking-actions">
+            <h2 class="detail-card-title" id="heading-booking-actions">Manage Reservation</h2>
+            <div style="display: flex; flex-direction: column; gap: var(--sp-3);">
+
+              <!-- Leave Review Button (Shown if can_review && !has_review) -->
+              <button type="button" class="btn btn-secondary" id="btn-open-review-modal" hidden style="width: 100%; justify-content: center;">
+                ⭐ Rate & Review Tour
+              </button>
+
+              <!-- Cancel Booking Button (Shown if can_cancel === true) -->
+              <button type="button" class="btn btn-ghost" id="btn-open-cancel-modal" hidden style="width: 100%; justify-content: center; color: var(--color-danger); border: 1px solid var(--color-danger-light);">
+                Cancel Booking
+              </button>
+
+              <div id="cancellation-policy-note" class="text-xs text-muted" style="line-height: 1.5;">
+                ℹ️ <strong>Cancellation Window:</strong> Free cancellation is permitted up to 2 days prior to scheduled departure.
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ── Cancellation Confirmation Modal ────────────────────────────────────── -->
+  <div id="cancel-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="modal-cancel-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-cancel-title">Cancel Reservation</h2>
+        <button type="button" class="modal-close" id="btn-close-cancel-modal" aria-label="Close dialog">×</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Error Alert within modal -->
+        <div id="cancel-error-alert" class="alert alert-error" hidden style="margin-bottom: var(--sp-4);" role="alert">
+          <span class="alert-icon" aria-hidden="true">⚠️</span>
+          <div class="alert-body">
+            <p id="cancel-error-text">Failed to cancel booking.</p>
+          </div>
+        </div>
+
+        <p style="margin-bottom: var(--sp-3); font-size: var(--text-base);">
+          Are you sure you want to cancel booking <strong id="cancel-modal-booking-id">#—</strong> for <strong id="cancel-modal-package-title">Tour</strong>?
+        </p>
+
+        <div style="background: var(--color-surface-sunken); border-left: 4px solid var(--color-warning); padding: var(--sp-3); border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--sp-4);">
+          <p style="margin: 0 0 var(--sp-1) 0;"><strong>Notice:</strong></p>
+          <ul style="margin: 0; padding-left: var(--sp-4);">
+            <li>Your reserved seats will be released immediately.</li>
+            <li>If you have already paid, refund processing will be initiated according to policy.</li>
+            <li>This action cannot be undone.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-dismiss-cancel-modal">
+          Keep Booking
+        </button>
+        <button type="button" class="btn btn-danger" id="btn-confirm-cancel">
+          Yes, Cancel Booking
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tour Review Modal ─────────────────────────────────────────────────── -->
+  <div id="review-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="modal-review-title">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-review-title">Write a Review</h2>
+        <button type="button" class="modal-close" id="btn-close-review-modal" aria-label="Close dialog">×</button>
+      </div>
+
+      <form id="review-form" novalidate>
+        <div class="modal-body">
+
+          <!-- Error Alert within modal -->
+          <div id="review-error-alert" class="alert alert-error" hidden style="margin-bottom: var(--sp-4);" role="alert">
+            <span class="alert-icon" aria-hidden="true">⚠️</span>
+            <div class="alert-body">
+              <p id="review-error-text">Failed to submit review.</p>
+            </div>
+          </div>
+
+          <div style="margin-bottom: var(--sp-4);">
+            <label class="form-label" style="display: block; margin-bottom: var(--sp-2);">
+              Rating <span class="required" style="color: var(--color-danger);">*</span>
+            </label>
+            <!-- 5-Star Interactive Rating Radio Group -->
+            <div class="star-rating-widget" id="review-rating-group" role="radiogroup" aria-label="Select star rating from 1 to 5">
+              <input type="radio" id="star-5" name="rating" value="5" required>
+              <label for="star-5" title="5 stars - Outstanding">★</label>
+              <input type="radio" id="star-4" name="rating" value="4">
+              <label for="star-4" title="4 stars - Very Good">★</label>
+              <input type="radio" id="star-3" name="rating" value="3">
+              <label for="star-3" title="3 stars - Good">★</label>
+              <input type="radio" id="star-2" name="rating" value="2">
+              <label for="star-2" title="2 stars - Fair">★</label>
+              <input type="radio" id="star-1" name="rating" value="1">
+              <label for="star-1" title="1 star - Poor">★</label>
+            </div>
+            <span id="review-rating-feedback" class="text-xs text-muted">Select 1 to 5 stars</span>
+          </div>
+
+          <div class="field" style="margin-bottom: var(--sp-3);">
+            <label class="form-label" for="review-comment">
+              Your Feedback / Comment (Optional)
+            </label>
+            <textarea id="review-comment" name="comment" class="field-input form-control" rows="4" maxlength="1000" placeholder="Tell other travelers about your tour experience, accommodation, guide, and highlights..."></textarea>
+            <span class="text-xs text-muted">Maximum 1000 characters</span>
+          </div>
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-dismiss-review-modal">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-review">
+            Submit Review
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Site footer rendered by layout.js -->
+  <footer id="site-footer"></footer>
+
+  <!-- Shared Foundation Scripts (in required order) -->
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/layout.js"></script>
+
+  <!-- Page Controller Script -->
+  <script src="/js/pages/booking-detail.js"></script>
+
+</body>
+</html>
