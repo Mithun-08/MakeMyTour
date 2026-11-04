@@ -31,11 +31,14 @@ const adminBookingsRoute = routes.find(
 const customerReportsRoute = routes.find(
   r => r.method === 'GET' && r.path === '/api/customer/reports'
 );
+const providerReportsRoute = routes.find(
+  r => r.method === 'GET' && r.path === '/api/provider/reports'
+);
 
 describe('M3 Day 6: Reports & Revenue Routes — Registration', () => {
-  it('exports an array containing all 4 required reporting routes', () => {
+  it('exports an array containing all 5 required reporting routes', () => {
     assert.ok(Array.isArray(routes), 'Route module must export an array');
-    assert.equal(routes.length, 4, 'Route module must export exactly 4 routes');
+    assert.equal(routes.length, 5, 'Route module must export exactly 5 routes');
   });
 
   it('declares GET /api/admin/stats with ADMIN role and VIEW_REPORTS permission', () => {
@@ -63,6 +66,12 @@ describe('M3 Day 6: Reports & Revenue Routes — Registration', () => {
     assert.ok(customerReportsRoute, 'Route must exist');
     assert.deepEqual(customerReportsRoute.roles, ['CUSTOMER']);
     assert.equal(typeof customerReportsRoute.handler, 'function');
+  });
+
+  it('declares GET /api/provider/reports with PROVIDER role', () => {
+    assert.ok(providerReportsRoute, 'Route must exist');
+    assert.deepEqual(providerReportsRoute.roles, ['PROVIDER']);
+    assert.equal(typeof providerReportsRoute.handler, 'function');
   });
 });
 

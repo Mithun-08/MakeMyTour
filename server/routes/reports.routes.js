@@ -7,6 +7,7 @@
  *   GET /api/admin/reports/revenue  — Chronological revenue series (ADMIN + VIEW_REPORTS)
  *   GET /api/admin/reports/bookings — Booking breakdowns and rankings (ADMIN + VIEW_REPORTS)
  *   GET /api/customer/reports       — Authenticated customer summary & upcoming trips (CUSTOMER)
+ *   GET /api/provider/reports       — Authenticated provider summary & package breakdown (PROVIDER)
  *
  * Revenue definition (CONTRACT line 442):
  *   SUM(bookings.total_amount) WHERE payment_status = 'PAID'.
@@ -318,6 +319,76 @@ async function getCustomerReports(ctx) {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. GET /api/provider/reports  (PROVIDER only)
+// ─────────────────────────────────────────────────────────────────────────────
+async function getProviderReports(ctx) {
+  if (!ctx.user) {
+    throw new HttpError(401, 'UNAUTHENTICATED', 'Authentication required');
+  }
+  if (ctx.user.role !== 'PROVIDER') {
+    throw new HttpError(403, 'FORBIDDEN', 'Access denied: only providers can view provider reports');
+  }
+
+  const providerId = ctx.user.user_id;
+
+  const sql = `
+    SELECT
+      p.package_id,
+      p.title,
+      COALESCE(b.booking_count, 0) AS bookings,
+      COALESCE(b.traveler_count, 0) AS travelers,
+      COALESCE(b.earnings, 0) AS earnings,
+      r.avg_rating,
+      COALESCE(r.review_count, 0) AS review_count
+    FROM tour_packages p
+    LEFT JOIN (
+      SELECT
+        package_id,
+        COUNT(*) AS booking_count,
+        COALESCE(SUM(travelers), 0) AS traveler_count,
+        COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN total_amount ELSE 0 END), 0) AS earnings
+      FROM bookings
+      GROUP BY package_id
+    ) b ON b.package_id = p.package_id
+    LEFT JOIN (
+      SELECT
+        package_id,
+        ROUND(AVG(rating), 1) AS avg_rating,
+        COUNT(review_id) AS review_count
+      FROM reviews
+      GROUP BY package_id
+    ) r ON r.package_id = p.package_id
+    WHERE p.provider_id = ?
+    ORDER BY p.package_id ASC
+  `;
+
+  const rows = await ctx.db.query(sql, [providerId]);
+
+  const packageList = (rows || []).map((r) => ({
+    package_id: Number(r.package_id),
+    title: r.title,
+    bookings: Number(r.bookings || 0),
+    travelers: Number(r.travelers || 0),
+    earnings: Math.round(Number(r.earnings || 0) * 100) / 100,
+    avg_rating: r.avg_rating !== null && r.avg_rating !== undefined ? Number(r.avg_rating) : null,
+    review_count: Number(r.review_count || 0)
+  }));
+
+  const total_earnings = Math.round(packageList.reduce((sum, p) => sum + p.earnings, 0) * 100) / 100;
+  const total_bookings = packageList.reduce((sum, p) => sum + p.bookings, 0);
+  const total_travelers = packageList.reduce((sum, p) => sum + p.travelers, 0);
+
+  return {
+    data: {
+      total_earnings,
+      total_bookings,
+      total_travelers,
+      packages: packageList
+    }
+  };
+}
+
 module.exports = [
   {
     method: 'GET',
@@ -345,5 +416,11 @@ module.exports = [
     path: '/api/customer/reports',
     roles: ['CUSTOMER'],
     handler: getCustomerReports
+  },
+  {
+    method: 'GET',
+    path: '/api/provider/reports',
+    roles: ['PROVIDER'],
+    handler: getProviderReports
   }
 ];
