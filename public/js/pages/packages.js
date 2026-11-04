@@ -168,7 +168,13 @@
     var body = el('div', 'pkg-card-body');
     var place = [pkg.destination_name, pkg.state].filter(Boolean).join(', ');
     body.appendChild(el('p', 'pkg-card-dest', place ? '📍 ' + place : ''));
-    body.appendChild(el('h3', 'pkg-card-title', pkg.title));
+    var titleH3 = el('h3', 'pkg-card-title');
+    var titleLink = el('a', null, pkg.title);
+    titleLink.href = detailUrl;
+    titleLink.style.color = 'inherit';
+    titleLink.style.textDecoration = 'none';
+    titleH3.appendChild(titleLink);
+    body.appendChild(titleH3);
 
     var meta = el('div', 'pkg-card-meta');
     if (pkg.duration_days) {
