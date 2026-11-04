@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My Bookings | MakeMyTour — Local Tourism Package Booking</title>
+  <meta name="description" content="View, track, pay for, and manage all your tour bookings on MakeMyTour.">
+
+  <!-- Shared stylesheet -->
+  <link rel="stylesheet" href="/css/style.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* Customer bookings custom layout */
+    .bookings-header {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-4);
+      margin-bottom: var(--sp-6);
+    }
+    @media (min-width: 600px) {
+      .bookings-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+      font-size: var(--text-sm);
+      margin-bottom: var(--sp-4);
+      color: var(--color-text-muted);
+    }
+    .breadcrumb a {
+      color: var(--color-text-muted);
+      text-decoration: none;
+    }
+    .breadcrumb a:hover {
+      color: var(--color-primary);
+      text-decoration: underline;
+    }
+
+    .filter-section {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      padding: var(--sp-4);
+      margin-bottom: var(--sp-6);
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-4);
+    }
+
+    .filter-controls-row {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-3);
+    }
+    @media (min-width: 768px) {
+      .filter-controls-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+    }
+
+    .bookings-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--sp-2);
+    }
+
+    .bookings-filters .btn.active {
+      background: var(--color-primary);
+      color: #fff;
+      border-color: var(--color-primary);
+    }
+
+    .search-box {
+      flex: 1;
+      max-width: 360px;
+      min-width: 220px;
+    }
+
+    .bookings-pagination {
+      margin-top: var(--sp-6);
+      display: flex;
+      justify-content: center;
+    }
+
+    .package-cell {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-3);
+    }
+
+    .package-thumb {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+      background: var(--color-primary-light);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-sm);
+      color: var(--color-primary);
+      flex-shrink: 0;
+    }
+
+    .action-group {
+      display: inline-flex;
+      gap: var(--sp-2);
+      flex-wrap: wrap;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Site header rendered by layout.js (role-aware: Home, Packages, My Bookings, My Reviews) -->
+  <header id="site-header"></header>
+
+  <main id="app" class="container" style="padding-top: var(--sp-6); padding-bottom: var(--sp-16);">
+
+    <!-- Breadcrumb navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/index.html">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="/customer-dashboard.html">Dashboard</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page" style="color: var(--color-text);">My Bookings</span>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="bookings-header">
+      <div>
+        <h1 id="page-title">My Bookings</h1>
+        <p class="text-muted">View, track, pay for, and manage all your tour bookings.</p>
+      </div>
+      <div style="display: flex; gap: var(--sp-2); flex-wrap: wrap;">
+        <a href="/customer-dashboard.html" class="btn btn-secondary" id="btn-view-dashboard">
+          Dashboard
+        </a>
+        <a href="/packages.html" class="btn btn-primary" id="btn-browse-tours">
+          + Explore More Tours
+        </a>
+      </div>
+    </div>
+
+    <!-- Filters & Search Controls -->
+    <section class="filter-section" aria-label="Booking filters">
+      <div class="filter-controls-row">
+
+        <!-- Status Filters (ALL, PENDING, CONFIRMED, COMPLETED, CANCELLED) -->
+        <div id="bookings-filters" class="bookings-filters" role="tablist" aria-label="Filter bookings by status">
+          <button type="button" class="btn btn-sm btn-ghost active" data-status="" role="tab" aria-selected="true">
+            All Bookings
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost" data-status="PENDING" role="tab" aria-selected="false">
+            Pending
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost" data-status="CONFIRMED" role="tab" aria-selected="false">
+            Confirmed
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost" data-status="COMPLETED" role="tab" aria-selected="false">
+            Completed
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost" data-status="CANCELLED" role="tab" aria-selected="false">
+            Cancelled
+          </button>
+        </div>
+
+        <!-- Search Input -->
+        <div class="search-box">
+          <input
+            type="search"
+            id="bookings-search"
+            name="q"
+            class="field-input"
+            placeholder="Search by tour name or booking ID…"
+            aria-label="Search bookings"
+            autocomplete="off"
+          >
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Results Header -->
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--sp-3);">
+      <h2 style="font-size: var(--text-xl);">Booking History</h2>
+      <span id="bookings-count" class="text-sm text-muted" aria-live="polite">Showing 0 bookings</span>
+    </div>
+
+    <!-- Responsive Bookings Table / Container -->
+    <div id="bookings-list" class="bookings-list" aria-live="polite" aria-busy="false">
+
+      <!-- Loading State -->
+      <div id="bookings-loading" class="state-box state-loading" hidden aria-live="polite">
+        <div class="state-box-icon" aria-hidden="true">⏳</div>
+        <div class="state-box-title">Loading your bookings…</div>
+        <div class="state-box-body">Please wait while we fetch your tour history.</div>
+      </div>
+
+      <!-- Empty State -->
+      <div id="bookings-empty" class="state-box state-empty" hidden>
+        <div class="state-box-icon" aria-hidden="true">🎒</div>
+        <div class="state-box-title">No bookings found</div>
+        <div class="state-box-body">You have not made any bookings yet or none match your selected filter.</div>
+        <a href="/packages.html" class="btn btn-primary" id="btn-empty-explore" style="margin-top: var(--sp-4);">
+          Explore Packages
+        </a>
+      </div>
+
+      <!-- Error State -->
+      <div id="bookings-error" class="state-box state-error" hidden role="alert">
+        <div class="state-box-icon" aria-hidden="true">⚠️</div>
+        <div class="state-box-title">Unable to load bookings</div>
+        <div class="state-box-body" id="bookings-error-msg">Something went wrong while retrieving your bookings. Please try again.</div>
+        <button type="button" class="btn btn-secondary" id="btn-retry-bookings" style="margin-top: var(--sp-4);">
+          Try Again
+        </button>
+      </div>
+
+      <!-- Table Wrapper for responsive display -->
+      <div id="bookings-table-wrapper" class="table-wrapper" hidden>
+        <table class="table" id="bookings-table" aria-label="Customer Bookings">
+          <thead>
+            <tr>
+              <th scope="col" style="width: 80px;">ID</th>
+              <th scope="col" style="min-width: 240px;">Tour Package</th>
+              <th scope="col" style="min-width: 130px;">Departure Date</th>
+              <th scope="col" style="width: 100px;">Travelers</th>
+              <th scope="col" style="width: 130px;">Total Amount</th>
+              <th scope="col" style="width: 140px;">Status</th>
+              <th scope="col" style="width: 120px;">Payment</th>
+              <th scope="col" style="min-width: 150px; text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="bookings-tbody">
+            <!-- Rows dynamically rendered by page controller -->
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- Dedicated Pagination Container -->
+    <div id="bookings-pagination" class="bookings-pagination" aria-label="Pagination navigation"></div>
+
+  </main>
+
+  <!-- Site footer rendered by layout.js -->
+  <footer id="site-footer"></footer>
+
+  <!-- Shared Foundation Scripts (in required order) -->
+  <script src="/js/api.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/layout.js"></script>
+
+  <!-- Page Controller Script -->
+  <script src="/js/pages/my-bookings.js"></script>
+
+</body>
+</html>
