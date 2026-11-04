@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register | MakeMyTour — Local Tourism Packages</title>
+  <meta name="description" content="Create an account on MakeMyTour to book curated local holiday packages or list your tours as a verified provider.">
+
+  <!-- Shared stylesheet -->
+  <link rel="stylesheet" href="/css/style.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Header filled by layout.js -->
+  <header id="site-header"></header>
+
+  <main id="app" class="container" style="padding-top: var(--sp-8); padding-bottom: var(--sp-12);">
+    <div class="card" style="max-width: 520px; margin: 0 auto; padding: var(--sp-8); box-shadow: var(--shadow-md);">
+
+      <div style="text-align: center; margin-bottom: var(--sp-6);">
+        <span style="font-size: 2.5rem;" aria-hidden="true">🗺️</span>
+        <h1 style="font-size: var(--text-2xl); font-weight: var(--font-bold); margin-top: var(--sp-2); margin-bottom: var(--sp-2);">Create an Account</h1>
+        <p class="text-muted" style="font-size: var(--text-sm);">Join MakeMyTour to discover or offer unforgettable local tours</p>
+      </div>
+
+      <!-- Error Alert -->
+      <div id="register-alert" class="alert alert-error" role="alert" style="display: none; margin-bottom: var(--sp-5);">
+        <span class="alert-icon" aria-hidden="true">⚠️</span>
+        <div class="alert-body">
+          <div class="alert-title">Registration failed</div>
+          <div id="register-alert-msg" class="alert-msg"></div>
+        </div>
+      </div>
+
+      <!-- Registration Form -->
+      <form id="register-form" class="form" novalidate>
+
+        <div class="field">
+          <label class="field-label" for="register-role">
+            Account Type <span class="required">*</span>
+          </label>
+          <select id="register-role" name="role" class="field-select" required>
+            <option value="CUSTOMER" selected>Customer — Book & explore packages</option>
+            <option value="PROVIDER">Provider — List & manage tours</option>
+          </select>
+          <span class="field-error"></span>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="register-name">
+            Full Name <span class="required">*</span>
+          </label>
+          <input
+            type="text"
+            id="register-name"
+            name="name"
+            class="field-input"
+            placeholder="e.g. Rahul Sharma"
+            required
+            autocomplete="name"
+          >
+          <span class="field-error"></span>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="register-email">
+            Email Address <span class="required">*</span>
+          </label>
+          <input
+            type="email"
+            id="register-email"
+            name="email"
+            class="field-input"
+            placeholder="name@example.com"
+            required
+            autocomplete="email"
+          >
+          <span class="field-error"></span>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="register-mobile">
+            Mobile Number (10 digits) <span class="required">*</span>
+          </label>
+          <input
+            type="tel"
+            id="register-mobile"
+            name="mobile"
+            class="field-input"
+            placeholder="9876543210"
+            maxlength="10"
+            pattern="[0-9]{10}"
+            required
+            autocomplete="tel"
+          >
+          <span class="field-hint">10-digit mobile number for booking confirmations</span>
+          <span class="field-error"></span>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label class="field-label" for="register-password">
+              Password <span class="required">*</span>
+            </label>
+            <input
+              type="password"
+              id="register-password"
+              name="password"
+              class="field-input"
+              placeholder="At least 8 chars"
+              required
+              minlength="8"
+              autocomplete="new-password"
+            >
+            <span class="field-error"></span>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="register-confirm-password">
+              Confirm Password <span class="required">*</span>
+            </label>
+            <input
+              type="password"
+              id="register-confirm-password"
+              name="confirm_password"
+              class="field-input"
+              placeholder="Repeat password"
+              required
+              autocomplete="new-password"
+            >
+            <span class="field-error"></span>
+          </div>
+        </div>
+
+        <!-- Optional City and State -->
+        <div class="form-row">
+          <div class="field">
+            <label class="field-label" for="register-city">
+              City <span class="text-muted">(Optional)</span>
+            </label>
+            <input
+              type="text"
+              id="register-city"
+              name="city"
+              class="field-input"
+              placeholder="e.g. Panaji"
+              autocomplete="address-level2"
+            >
+            <span class="field-error"></span>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="register-state">
+              State <span class="text-muted">(Optional)</span>
+            </label>
+            <input
+              type="text"
+              id="register-state"
+              name="state"
+              class="field-input"
+              placeholder="e.g. Goa"
+              autocomplete="address-level1"
+            >
+            <span class="field-error"></span>
+          </div>
+        </div>
+
+        <button type="submit" id="register-submit-btn" class="btn btn-primary btn-block btn-lg" style="margin-top: var(--sp-2);">
+          Create Account
+        </button>
+      </form>
+
+      <div style="text-align: center; margin-top: var(--sp-6); padding-top: var(--sp-4); border-top: 1px solid var(--color-border-light); font-size: var(--text-sm);">
+        <p class="text-muted">
+          Already have an account? <a href="/login.html" style="font-weight: var(--font-semi); color: var(--color-primary);">Log in here</a>
+        </p>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer filled by layout.js -->
+  <footer id="site-footer"></footer>
+
+  <!-- Foundation scripts — order matters per CONTRACT §1.8 -->
+  <script src="/js/api.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+
+  <!-- Page-specific script -->
+  <script src="/js/pages/register.js"></script>
+
+</body>
+</html>
