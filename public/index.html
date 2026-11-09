@@ -23,6 +23,12 @@
 
     <!-- Hero -->
     <section class="hero" aria-labelledby="hero-heading">
+      <img
+        class="hero-bg-img"
+        src="/assets/images/hero-travel-banner.jpg"
+        alt="Panoramic mountain lake and sunrise travel landscape"
+        onerror="this.style.display='none'"
+      >
       <div class="hero-content">
         <span class="hero-eyebrow">🧭 Local Tourism · India</span>
         <h1 id="hero-heading">Find Your Perfect<br>Local Adventure</h1>
@@ -52,11 +58,13 @@
     </section>
 
     <!-- Destinations strip -->
-    <section class="section" aria-labelledby="dest-heading">
+    <section class="section" id="destinations-section" aria-labelledby="dest-heading">
       <div class="section-head">
         <h2 class="section-title" id="dest-heading">Popular Destinations</h2>
-        <a class="section-link" href="/destinations.html">View all →</a>
+        <a class="section-link" href="/packages.html">View all →</a>
       </div>
+
+      <div id="home-dest-grid" class="dest-grid" style="margin-bottom: var(--sp-4);" aria-label="Featured destinations gallery"></div>
 
       <div id="home-dest-list" class="dest-chips" aria-live="polite" aria-label="Destination list">
         <!-- JS inserts destination chips here -->

@@ -26,15 +26,15 @@
 
   var PUBLIC_NAV = [
     { label: 'Home',         href: '/index.html' },
-    { label: 'Destinations', href: '/destinations.html' },
+    { label: 'Destinations', href: '/index.html#destinations-section' },
     { label: 'Packages',     href: '/packages.html' }
   ];
 
   var CUSTOMER_NAV = [
     { label: 'Home',         href: '/index.html' },
     { label: 'Packages',     href: '/packages.html' },
-    { label: 'My Bookings',  href: '/customer-bookings.html' },
-    { label: 'My Reviews',   href: '/customer-reviews.html' }
+    { label: 'Dashboard',    href: '/customer-dashboard.html' },
+    { label: 'My Bookings',  href: '/customer-bookings.html' }
   ];
 
   var PROVIDER_NAV = [
@@ -295,7 +295,7 @@
     var exploreLinks = document.createElement('div');
     exploreLinks.className = 'footer-links';
     [
-      { label: 'Destinations', href: '/destinations.html' },
+      { label: 'Destinations', href: '/index.html#destinations-section' },
       { label: 'Packages',     href: '/packages.html' },
       { label: 'Register',     href: '/register.html' }
     ].forEach(function (item) {
@@ -319,9 +319,10 @@
     var accountLinks = document.createElement('div');
     accountLinks.className = 'footer-links';
     [
-      { label: 'Log in',    href: '/login.html' },
-      { label: 'Register',  href: '/register.html' },
-      { label: 'My Profile', href: '/profile.html' }
+      { label: 'Log in',       href: '/login.html' },
+      { label: 'Register',     href: '/register.html' },
+      { label: 'My Dashboard', href: '/customer-dashboard.html' },
+      { label: 'My Bookings',  href: '/customer-bookings.html' }
     ].forEach(function (item) {
       var a = document.createElement('a');
       a.href = item.href;

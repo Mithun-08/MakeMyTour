@@ -1,421 +1,435 @@
-// server/routes/packages.routes.js — Owner: M2 (Mehar­naz)
-// Contract: docs/CONTRACT.md §1.8 Catalog (M2) – Packages API
+/**
+ * server/routes/packages.routes.js — Owner: M2
+ *
+ * Public Package APIs per CONTRACT §2:
+ *
+ *   GET /api/packages — Public
+ *     Search and filter packages with pagination and sorting.
+ *     Returns APPROVED packages only.
+ *     Supports query params:
+ *       - q: keyword search in title, description, destination, category
+ *       - destination_id: filter by destination ID
+ *       - category_id: filter by category ID
+ *       - min_price, max_price: price range
+ *       - min_days, max_days: duration range
+ *       - date: packages with OPEN availability on or after date
+ *       - sort: price_asc, price_desc, newest, rating, duration
+ *       - page, pageSize: pagination
+ *     Returns rows with package_id, title, image, price, duration_days,
+ *     destination info, category info, provider info, avg_rating, review_count,
+ *     next_available_date.
+ *
+ *   GET /api/packages/:id — Public
+ *     Detailed view of a single package.
+ *     Public sees APPROVED packages only (returns 404 for nonexistent or non-approved).
+ *     Returns package fields, inclusions[], exclusions[], provider { user_id, name, city, state },
+ *     destination, category, itinerary[], availability[] (future OPEN dates), rating { avg, count }.
+ */
 
 'use strict';
 
 const { HttpError } = require('../utils/http');
-const validate = require('../utils/validate');
-const { logAction } = require('../utils/logger');
 
-/** Helper: base package SELECT with joins and computed fields */
-function basePackageSelect() {
-  return `
-    p.package_id, p.title, p.image, p.price, p.duration_days, p.status,
-    d.destination_id, d.name AS destination_name, d.city, d.state,
-    c.category_id, c.category_name,
-    u.user_id AS provider_id, u.name AS provider_name,
-    (SELECT AVG(r.rating) FROM reviews r WHERE r.package_id = p.package_id) AS avg_rating,
-    (SELECT COUNT(*) FROM reviews r WHERE r.package_id = p.package_id) AS review_count,
-    (SELECT MIN(a.available_date)
-       FROM package_availability a
-       WHERE a.package_id = p.package_id
-         AND a.status = 'OPEN'
-         AND a.available_date >= CURDATE()) AS next_available_date
-  `;
+const ALLOWED_SORTS = {
+  price_asc:  'p.price ASC, p.package_id ASC',
+  price_desc: 'p.price DESC, p.package_id ASC',
+  newest:     'p.created_at DESC, p.package_id DESC',
+  rating:     'avg_rating DESC, review_count DESC, p.package_id ASC',
+  duration:   'p.duration_days ASC, p.package_id ASC'
+};
+
+function formatDate(val) {
+  if (!val) return null;
+  if (val instanceof Date) return val.toISOString().slice(0, 10);
+  return String(val).slice(0, 10);
 }
 
-/** PUBLIC: GET /api/packages */
-async function listPackages(ctx) {
-  const query = validate(ctx.query || {}, {
-    q: { type: 'string', max: 200 },
-    destination_id: { type: 'int' },
-    category_id: { type: 'int' },
-    min_price: { type: 'number' },
-    max_price: { type: 'number' },
-    sort: { type: 'enum', values: ['price_asc','price_desc','newest','rating','duration'] },
-    page: { type: 'int', min: 1, default: 1 },
-    pageSize: { type: 'int', min: 1, max: 50, default: 10 }
-  });
-
-  const where = [];
+/**
+ * GET /api/packages
+ * Public package search, filter, and pagination.
+ */
+async function getPackages(ctx) {
+  const whereClauses = ["p.status = 'APPROVED'"];
   const params = [];
 
-  // Only approved packages from active providers
-  where.push("p.status = 'APPROVED'", "u.status = 'ACTIVE'");
-
-  if (query.q) {
-    where.push('(p.title LIKE ? OR p.description LIKE ?)');
-    const like = `%${query.q}%`;
-    params.push(like, like);
-  }
-  if (query.destination_id) { where.push('p.destination_id = ?'); params.push(query.destination_id); }
-  if (query.category_id) { where.push('p.category_id = ?'); params.push(query.category_id); }
-  if (query.min_price !== undefined) { where.push('p.price >= ?'); params.push(query.min_price); }
-  if (query.max_price !== undefined) { where.push('p.price <= ?'); params.push(query.max_price); }
-
-  // Sorting
-  let order = 'p.created_at DESC'; // default newest
-  if (query.sort) {
-    switch (query.sort) {
-      case 'price_asc': order = 'p.price ASC'; break;
-      case 'price_desc': order = 'p.price DESC'; break;
-      case 'newest': order = 'p.created_at DESC'; break;
-      case 'rating': order = 'avg_rating DESC'; break;
-      case 'duration': order = 'p.duration_days DESC'; break;
+  // 1. Keyword search (q)
+  const rawQ = ctx.query?.q ?? ctx.query?.search;
+  if (rawQ !== undefined && rawQ !== null) {
+    if (typeof rawQ !== 'string' || rawQ.length > 100) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'q parameter must be a string up to 100 characters', {
+        q: 'q parameter must be a string up to 100 characters'
+      });
+    }
+    const q = rawQ.trim();
+    if (q) {
+      whereClauses.push('(p.title LIKE ? OR p.description LIKE ? OR d.name LIKE ? OR d.city LIKE ? OR c.category_name LIKE ?)');
+      params.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
     }
   }
 
-  const limit = query.pageSize;
-  const offset = (query.page - 1) * limit;
-
-  const sql = `
-    SELECT ${basePackageSelect()}, COUNT(*) OVER() AS total_count
-    FROM tour_packages p
-    JOIN destinations d ON p.destination_id = d.destination_id
-    JOIN categories c ON p.category_id = c.category_id
-    JOIN users u ON p.provider_id = u.user_id
-    ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-    ORDER BY ${order}
-    LIMIT ? OFFSET ?`;
-  params.push(limit, offset);
-
-  const rows = await ctx.db.query(sql, params);
-  const total = rows.length ? Number(rows[0].total_count) : 0;
-  const data = rows.map(r => ({
-    package_id: r.package_id,
-    title: r.title,
-    image: r.image,
-    price: Number(r.price),
-    duration_days: Number(r.duration_days),
-    destination_id: r.destination_id,
-    destination_name: r.destination_name,
-    state: r.state,
-    category_id: r.category_id,
-    category_name: r.category_name,
-    provider_id: r.provider_id,
-    provider_name: r.provider_name,
-    avg_rating: r.avg_rating !== null ? Number(r.avg_rating) : null,
-    review_count: Number(r.review_count),
-    next_available_date: r.next_available_date ? r.next_available_date.toISOString().split('T')[0] : null
-  }));
-
-  return { data, meta: { total, page: query.page, pageSize: limit } };
-}
-
-/** PUBLIC: GET /api/packages/:id */
-async function getPackageDetail(ctx) {
-  const id = Number(ctx.params.id);
-  if (!id) throw new HttpError(400, 'VALIDATION_ERROR', 'Invalid package id');
-
-  const rows = await ctx.db.query(`
-    SELECT ${basePackageSelect()}, p.inclusions, p.exclusions, p.capacity
-    FROM tour_packages p
-    JOIN destinations d ON p.destination_id = d.destination_id
-    JOIN categories c ON p.category_id = c.category_id
-    JOIN users u ON p.provider_id = u.user_id
-    WHERE p.package_id = ?
-  `, [id]);
-
-  if (!rows.length) throw new HttpError(404, 'NOT_FOUND', 'Package not found');
-  const pkg = rows[0];
-
-  // Public visibility check
-  if (pkg.status !== 'APPROVED' || pkg.provider_status !== 'ACTIVE') {
-    throw new HttpError(403, 'FORBIDDEN', 'Package not publicly visible');
+  // 2. destination_id
+  if (ctx.query?.destination_id !== undefined && ctx.query.destination_id !== null && ctx.query.destination_id !== '') {
+    const destId = parseInt(ctx.query.destination_id, 10);
+    if (isNaN(destId) || destId <= 0 || String(destId) !== String(ctx.query.destination_id).trim()) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'destination_id must be a positive integer', {
+        destination_id: 'destination_id must be a positive integer'
+      });
+    }
+    whereClauses.push('p.destination_id = ?');
+    params.push(destId);
   }
 
-  const inclusions = pkg.inclusions ? pkg.inclusions.split('\n').filter(Boolean) : [];
-  const exclusions = pkg.exclusions ? pkg.exclusions.split('\n').filter(Boolean) : [];
-
-  const itineraryRows = await ctx.db.query(`
-    SELECT day_no, title, description FROM package_itinerary
-    WHERE package_id = ? ORDER BY day_no ASC
-  `, [id]);
-
-  const availRows = await ctx.db.query(`
-    SELECT availability_id, available_date, seats_available, status
-    FROM package_availability
-    WHERE package_id = ?
-      AND status = 'OPEN'
-      AND available_date >= CURDATE()
-    ORDER BY available_date ASC
-  `, [id]);
-
-  const data = {
-    package_id: pkg.package_id,
-    title: pkg.title,
-    description: pkg.description,
-    image: pkg.image,
-    price: Number(pkg.price),
-    duration_days: Number(pkg.duration_days),
-    status: pkg.status,
-    destination: {
-      destination_id: pkg.destination_id,
-      name: pkg.destination_name,
-      city: pkg.city,
-      state: pkg.state
-    },
-    category: { category_id: pkg.category_id, name: pkg.category_name },
-    provider: { user_id: pkg.provider_id, name: pkg.provider_name },
-    inclusions,
-    exclusions,
-    itinerary: itineraryRows.map(r => ({ day_no: r.day_no, title: r.title, description: r.description })),
-    availability: availRows.map(r => ({ availability_id: r.availability_id, available_date: r.available_date.toISOString().split('T')[0], seats_available: r.seats_available, status: r.status })),
-    avg_rating: pkg.avg_rating !== null ? Number(pkg.avg_rating) : null,
-    review_count: Number(pkg.review_count)
-  };
-
-  return { data };
-}
-
-/** PROVIDER: GET /api/provider/packages */
-async function listProviderPackages(ctx) {
-  const user = ctx.user;
-  if (!user || user.role !== 'PROVIDER') throw new HttpError(401, 'UNAUTHENTICATED');
-
-  const rows = await ctx.db.query(`
-    SELECT ${basePackageSelect()}
-    FROM tour_packages p
-    JOIN destinations d ON p.destination_id = d.destination_id
-    JOIN categories c ON p.category_id = c.category_id
-    JOIN users u ON p.provider_id = u.user_id
-    WHERE p.provider_id = ?
-    ORDER BY p.created_at DESC
-  `, [user.user_id]);
-
-  const data = rows.map(r => ({
-    package_id: r.package_id,
-    title: r.title,
-    image: r.image,
-    price: Number(r.price),
-    duration_days: Number(r.duration_days),
-    status: r.status,
-    destination_name: r.destination_name,
-    category_name: r.category_name,
-    avg_rating: r.avg_rating !== null ? Number(r.avg_rating) : null,
-    review_count: Number(r.review_count),
-    next_available_date: r.next_available_date ? r.next_available_date.toISOString().split('T')[0] : null
-  }));
-  return { data };
-}
-
-/** PROVIDER: GET /api/provider/packages/:id */
-async function getProviderPackage(ctx) {
-  const user = ctx.user;
-  if (!user || user.role !== 'PROVIDER') throw new HttpError(401, 'UNAUTHENTICATED');
-  const id = Number(ctx.params.id);
-  if (!id) throw new HttpError(400, 'VALIDATION_ERROR', 'Invalid package id');
-
-  const rows = await ctx.db.query(`
-    SELECT ${basePackageSelect()}, p.inclusions, p.exclusions, p.capacity
-    FROM tour_packages p
-    JOIN destinations d ON p.destination_id = d.destination_id
-    JOIN categories c ON p.category_id = c.category_id
-    JOIN users u ON p.provider_id = u.user_id
-    WHERE p.package_id = ? AND p.provider_id = ?
-  `, [id, user.user_id]);
-
-  if (!rows.length) throw new HttpError(404, 'NOT_FOUND', 'Package not found');
-  const pkg = rows[0];
-
-  const inclusions = pkg.inclusions ? pkg.inclusions.split('\n').filter(Boolean) : [];
-  const exclusions = pkg.exclusions ? pkg.exclusions.split('\n').filter(Boolean) : [];
-
-  const itineraryRows = await ctx.db.query(`
-    SELECT day_no, title, description FROM package_itinerary
-    WHERE package_id = ? ORDER BY day_no ASC
-  `, [id]);
-
-  const availRows = await ctx.db.query(`
-    SELECT availability_id, available_date, seats_available, status
-    FROM package_availability
-    WHERE package_id = ? ORDER BY available_date ASC
-  `, [id]);
-
-  const data = {
-    package_id: pkg.package_id,
-    title: pkg.title,
-    description: pkg.description,
-    image: pkg.image,
-    price: Number(pkg.price),
-    duration_days: Number(pkg.duration_days),
-    status: pkg.status,
-    capacity: Number(pkg.capacity),
-    destination: {
-      destination_id: pkg.destination_id,
-      name: pkg.destination_name,
-      city: pkg.city,
-      state: pkg.state
-    },
-    category: { category_id: pkg.category_id, name: pkg.category_name },
-    provider: { user_id: pkg.provider_id, name: pkg.provider_name },
-    inclusions,
-    exclusions,
-    itinerary: itineraryRows.map(r => ({ day_no: r.day_no, title: r.title, description: r.description })),
-    availability: availRows.map(r => ({ availability_id: r.availability_id, available_date: r.available_date.toISOString().split('T')[0], seats_available: r.seats_available, status: r.status })),
-    avg_rating: pkg.avg_rating !== null ? Number(pkg.avg_rating) : null,
-    review_count: Number(pkg.review_count)
-  };
-  return { data };
-}
-
-/** PROVIDER: POST /api/provider/packages */
-async function createProviderPackage(ctx) {
-  const user = ctx.user;
-  if (!user || user.role !== 'PROVIDER') throw new HttpError(401, 'UNAUTHENTICATED');
-
-  const body = validate(ctx.body || {}, {
-    title: { required: true, type: 'string', max: 200 },
-    description: { type: 'string' },
-    destination_id: { required: true, type: 'int' },
-    category_id: { required: true, type: 'int' },
-    inclusions: { type: 'array' },
-    exclusions: { type: 'array' },
-    duration_days: { required: true, type: 'int', min: 1 },
-    price: { required: true, type: 'number', min: 0 },
-    capacity: { required: true, type: 'int', min: 1 },
-    image: { type: 'string' },
-    itinerary: { type: 'array' },
-    availability: { type: 'array' }
-  });
-
-  const inclusionsStr = Array.isArray(body.inclusions) ? body.inclusions.join('\n') : null;
-  const exclusionsStr = Array.isArray(body.exclusions) ? body.exclusions.join('\n') : null;
-
-  const result = await ctx.db.transaction(async tx => {
-    const insertPkg = await tx.query(`
-      INSERT INTO tour_packages (provider_id, destination_id, category_id, title, description, inclusions, exclusions, duration_days, price, capacity, image, status)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?, 'PENDING')
-    `, [
-      user.user_id,
-      body.destination_id,
-      body.category_id,
-      body.title,
-      body.description || null,
-      inclusionsStr,
-      exclusionsStr,
-      body.duration_days,
-      body.price,
-      body.capacity,
-      body.image || null
-    ]);
-    const packageId = insertPkg.insertId;
-
-    if (Array.isArray(body.itinerary) && body.itinerary.length) {
-      const itVals = body.itinerary.map(i => [packageId, i.day_no, i.title, i.description]);
-      await tx.query('INSERT INTO package_itinerary (package_id, day_no, title, description) VALUES ?', [itVals]);
+  // 3. category_id
+  if (ctx.query?.category_id !== undefined && ctx.query.category_id !== null && ctx.query.category_id !== '') {
+    const catId = parseInt(ctx.query.category_id, 10);
+    if (isNaN(catId) || catId <= 0 || String(catId) !== String(ctx.query.category_id).trim()) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'category_id must be a positive integer', {
+        category_id: 'category_id must be a positive integer'
+      });
     }
-    if (Array.isArray(body.availability) && body.availability.length) {
-      const avVals = body.availability.map(a => [packageId, a.available_date, a.seats_available, 'OPEN']);
-      await tx.query('INSERT INTO package_availability (package_id, available_date, seats_available, status) VALUES ?', [avVals]);
-    }
-    return { package_id: packageId };
-  });
-
-  await logAction(ctx, 'PACKAGE_CREATED', `Package ${result.package_id} created by provider ${user.user_id}`);
-  ctx.res.statusCode = 201;
-  return { data: result };
-}
-
-/** PROVIDER: PUT /api/provider/packages/:id */
-async function updateProviderPackage(ctx) {
-  const user = ctx.user;
-  if (!user || user.role !== 'PROVIDER') throw new HttpError(401, 'UNAUTHENTICATED');
-  const id = Number(ctx.params.id);
-  if (!id) throw new HttpError(400, 'VALIDATION_ERROR', 'Invalid package id');
-
-  const body = validate(ctx.body || {}, {
-    title: { type: 'string', max: 200 },
-    description: { type: 'string' },
-    destination_id: { type: 'int' },
-    category_id: { type: 'int' },
-    inclusions: { type: 'array' },
-    exclusions: { type: 'array' },
-    duration_days: { type: 'int', min: 1 },
-    price: { type: 'number', min: 0 },
-    capacity: { type: 'int', min: 1 },
-    image: { type: 'string' },
-    itinerary: { type: 'array' }
-  });
-
-  const [ownerRows] = await ctx.db.query('SELECT provider_id FROM tour_packages WHERE package_id = ?', [id]);
-  if (!ownerRows.length) throw new HttpError(404, 'NOT_FOUND', 'Package not found');
-  if (ownerRows[0].provider_id !== user.user_id) throw new HttpError(403, 'FORBIDDEN', 'Not owner');
-
-  const sets = [];
-  const params = [];
-  if (body.title !== undefined) { sets.push('title = ?'); params.push(body.title); }
-  if (body.description !== undefined) { sets.push('description = ?'); params.push(body.description); }
-  if (body.destination_id !== undefined) { sets.push('destination_id = ?'); params.push(body.destination_id); }
-  if (body.category_id !== undefined) { sets.push('category_id = ?'); params.push(body.category_id); }
-  if (body.duration_days !== undefined) { sets.push('duration_days = ?'); params.push(body.duration_days); }
-  if (body.price !== undefined) { sets.push('price = ?'); params.push(body.price); }
-  if (body.capacity !== undefined) { sets.push('capacity = ?'); params.push(body.capacity); }
-  if (body.image !== undefined) { sets.push('image = ?'); params.push(body.image); }
-  if (body.inclusions !== undefined) { sets.push('inclusions = ?'); params.push(Array.isArray(body.inclusions) ? body.inclusions.join('\n') : null); }
-  if (body.exclusions !== undefined) { sets.push('exclusions = ?'); params.push(Array.isArray(body.exclusions) ? body.exclusions.join('\n') : null); }
-
-  if (sets.length) {
-    await ctx.db.query(`UPDATE tour_packages SET ${sets.join(', ')} WHERE package_id = ?`, [...params, id]);
+    whereClauses.push('p.category_id = ?');
+    params.push(catId);
   }
 
-  if (Array.isArray(body.itinerary)) {
-    await ctx.db.transaction(async tx => {
-      await tx.query('DELETE FROM package_itinerary WHERE package_id = ?', [id]);
-      if (body.itinerary.length) {
-        const itVals = body.itinerary.map(i => [id, i.day_no, i.title, i.description]);
-        await tx.query('INSERT INTO package_itinerary (package_id, day_no, title, description) VALUES ?', [itVals]);
-      }
+  // 4. min_price & max_price
+  let minP = null;
+  if (ctx.query?.min_price !== undefined && ctx.query.min_price !== null && ctx.query.min_price !== '') {
+    minP = Number(ctx.query.min_price);
+    if (isNaN(minP) || minP < 0) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'min_price must be a non-negative number', {
+        min_price: 'min_price must be a non-negative number'
+      });
+    }
+    whereClauses.push('p.price >= ?');
+    params.push(minP);
+  }
+
+  let maxP = null;
+  if (ctx.query?.max_price !== undefined && ctx.query.max_price !== null && ctx.query.max_price !== '') {
+    maxP = Number(ctx.query.max_price);
+    if (isNaN(maxP) || maxP < 0) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'max_price must be a non-negative number', {
+        max_price: 'max_price must be a non-negative number'
+      });
+    }
+    whereClauses.push('p.price <= ?');
+    params.push(maxP);
+  }
+
+  if (minP !== null && maxP !== null && minP > maxP) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'min_price cannot be greater than max_price', {
+      price: 'min_price cannot be greater than max_price'
     });
   }
 
-  await logAction(ctx, 'PACKAGE_UPDATED', `Package ${id} updated by provider ${user.user_id}`);
-  return { data: { package_id: id } };
+  // 5. min_days & max_days
+  let minD = null;
+  if (ctx.query?.min_days !== undefined && ctx.query.min_days !== null && ctx.query.min_days !== '') {
+    minD = Number(ctx.query.min_days);
+    if (!Number.isInteger(minD) || minD < 1) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'min_days must be a positive integer', {
+        min_days: 'min_days must be a positive integer'
+      });
+    }
+    whereClauses.push('p.duration_days >= ?');
+    params.push(minD);
+  }
+
+  let maxD = null;
+  if (ctx.query?.max_days !== undefined && ctx.query.max_days !== null && ctx.query.max_days !== '') {
+    maxD = Number(ctx.query.max_days);
+    if (!Number.isInteger(maxD) || maxD < 1) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'max_days must be a positive integer', {
+        max_days: 'max_days must be a positive integer'
+      });
+    }
+    whereClauses.push('p.duration_days <= ?');
+    params.push(maxD);
+  }
+
+  if (minD !== null && maxD !== null && minD > maxD) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'min_days cannot be greater than max_days', {
+      duration: 'min_days cannot be greater than max_days'
+    });
+  }
+
+  // 6. date filter (has OPEN availability on or after date)
+  if (ctx.query?.date !== undefined && ctx.query.date !== null && ctx.query.date !== '') {
+    const dateStr = String(ctx.query.date).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || isNaN(new Date(dateStr).getTime())) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'date must be a valid date in YYYY-MM-DD format', {
+        date: 'date must be a valid date in YYYY-MM-DD format'
+      });
+    }
+    whereClauses.push("EXISTS (SELECT 1 FROM package_availability pa WHERE pa.package_id = p.package_id AND pa.status = 'OPEN' AND pa.seats_available > 0 AND pa.available_date >= ? AND pa.available_date >= CURDATE())");
+    params.push(dateStr);
+  }
+
+  // 7. sort
+  let orderByClause = 'p.package_id ASC';
+  if (ctx.query?.sort !== undefined && ctx.query.sort !== null && ctx.query.sort !== '') {
+    const sortKey = String(ctx.query.sort).trim();
+    if (!ALLOWED_SORTS[sortKey]) {
+      throw new HttpError(400, 'VALIDATION_ERROR', `Invalid sort option: ${sortKey}. Allowed: ${Object.keys(ALLOWED_SORTS).join(', ')}`, {
+        sort: `Invalid sort option: ${sortKey}`
+      });
+    }
+    orderByClause = ALLOWED_SORTS[sortKey];
+  }
+
+  // 8. Pagination
+  let page = 1;
+  if (ctx.query?.page !== undefined && ctx.query.page !== null && ctx.query.page !== '') {
+    page = parseInt(ctx.query.page, 10);
+    if (isNaN(page) || page < 1 || String(page) !== String(ctx.query.page).trim()) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'page must be a positive integer', {
+        page: 'page must be a positive integer'
+      });
+    }
+  }
+
+  let pageSize = 10;
+  if (ctx.query?.pageSize !== undefined && ctx.query.pageSize !== null && ctx.query.pageSize !== '') {
+    pageSize = parseInt(ctx.query.pageSize, 10);
+    if (isNaN(pageSize) || pageSize < 1 || String(pageSize) !== String(ctx.query.pageSize).trim()) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'pageSize must be a positive integer', {
+        pageSize: 'pageSize must be a positive integer'
+      });
+    }
+    if (pageSize > 50) pageSize = 50;
+  }
+
+  const offset = (page - 1) * pageSize;
+  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+  // 9. Count total matching packages
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM tour_packages p
+    JOIN destinations d ON d.destination_id = p.destination_id
+    JOIN categories c ON c.category_id = p.category_id
+    JOIN users u ON u.user_id = p.provider_id
+    ${whereSql}
+  `;
+  const countRows = await ctx.db.query(countSql, params);
+  const total = Number(countRows[0]?.total || 0);
+
+  // 10. Fetch paginated data
+  const selectSql = `
+    SELECT
+      p.package_id,
+      p.title,
+      p.image,
+      p.price,
+      p.duration_days,
+      p.destination_id,
+      d.name AS destination_name,
+      d.city,
+      d.state,
+      p.category_id,
+      c.category_name,
+      p.provider_id,
+      u.name AS provider_name,
+      (SELECT ROUND(AVG(rating), 1) FROM reviews WHERE package_id = p.package_id) AS avg_rating,
+      (SELECT COUNT(*) FROM reviews WHERE package_id = p.package_id) AS review_count,
+      (SELECT MIN(available_date) FROM package_availability WHERE package_id = p.package_id AND status = 'OPEN' AND seats_available > 0 AND available_date >= CURDATE()) AS next_available_date
+    FROM tour_packages p
+    JOIN destinations d ON d.destination_id = p.destination_id
+    JOIN categories c ON c.category_id = p.category_id
+    JOIN users u ON u.user_id = p.provider_id
+    ${whereSql}
+    ORDER BY ${orderByClause}
+    LIMIT ? OFFSET ?
+  `;
+
+  const rows = await ctx.db.query(selectSql, [...params, pageSize, offset]);
+
+  const data = (rows || []).map((r) => ({
+    package_id:          Number(r.package_id),
+    title:               r.title,
+    image:               r.image || null,
+    price:               Number(r.price),
+    duration_days:       Number(r.duration_days),
+    destination_id:      Number(r.destination_id),
+    destination_name:    r.destination_name,
+    city:                r.city,
+    state:               r.state,
+    category_id:         Number(r.category_id),
+    category_name:       r.category_name,
+    provider_id:         Number(r.provider_id),
+    provider_name:       r.provider_name,
+    avg_rating:          r.avg_rating !== null && r.avg_rating !== undefined ? Number(r.avg_rating) : null,
+    review_count:        Number(r.review_count || 0),
+    next_available_date: formatDate(r.next_available_date)
+  }));
+
+  return {
+    data,
+    meta: {
+      page,
+      pageSize,
+      total
+    }
+  };
 }
 
-/** PROVIDER: PATCH /api/provider/packages/:id/status */
-async function patchProviderPackageStatus(ctx) {
+/**
+ * GET /api/packages/:id
+ * Public view of package details. Returns 404 for nonexistent or non-approved packages.
+ */
+async function getPackageById(ctx) {
+  const id = parseInt(ctx.params.id, 10);
+  if (isNaN(id) || id <= 0) {
+    throw new HttpError(404, 'NOT_FOUND', 'Package not found');
+  }
+
+  const pkgSql = `
+    SELECT
+      p.package_id,
+      p.title,
+      p.description,
+      p.inclusions,
+      p.exclusions,
+      p.duration_days,
+      p.price,
+      p.capacity,
+      p.image,
+      p.status,
+      p.created_at,
+      p.destination_id,
+      d.name AS destination_name,
+      d.city AS destination_city,
+      d.state AS destination_state,
+      d.country AS destination_country,
+      d.description AS destination_description,
+      p.category_id,
+      c.category_name,
+      c.description AS category_description,
+      p.provider_id,
+      u.name AS provider_name,
+      u.email AS provider_email,
+      u.mobile AS provider_mobile,
+      a.city AS provider_city,
+      a.state AS provider_state
+    FROM tour_packages p
+    JOIN destinations d ON d.destination_id = p.destination_id
+    JOIN categories c ON c.category_id = p.category_id
+    JOIN users u ON u.user_id = p.provider_id
+    LEFT JOIN addresses a ON a.user_id = p.provider_id
+    WHERE p.package_id = ?
+  `;
+
+  const rows = await ctx.db.query(pkgSql, [id]);
+  if (!rows || !rows.length) {
+    throw new HttpError(404, 'NOT_FOUND', 'Package not found');
+  }
+
+  const pkg = rows[0];
+
+  // Non-APPROVED only visible to owner provider and ADMIN
   const user = ctx.user;
-  if (!user || user.role !== 'PROVIDER') throw new HttpError(401, 'UNAUTHENTICATED');
-  const id = Number(ctx.params.id);
-  if (!id) throw new HttpError(400, 'VALIDATION_ERROR', 'Invalid package id');
-  const body = validate(ctx.body || {}, { status: { required: true, type: 'enum', values: ['APPROVED', 'DISABLED'] } });
+  const isOwner = user && user.role === 'PROVIDER' && Number(user.user_id) === Number(pkg.provider_id);
+  const isAdmin = user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN');
+  if (pkg.status !== 'APPROVED' && !isOwner && !isAdmin) {
+    throw new HttpError(404, 'NOT_FOUND', 'Package not found');
+  }
 
-  const [ownerRows] = await ctx.db.query('SELECT provider_id FROM tour_packages WHERE package_id = ?', [id]);
-  if (!ownerRows.length) throw new HttpError(404, 'NOT_FOUND', 'Package not found');
-  if (ownerRows[0].provider_id !== user.user_id) throw new HttpError(403, 'FORBIDDEN', 'Not owner');
+  // Itinerary
+  const itineraryRows = await ctx.db.query(
+    'SELECT day_no, title, description FROM package_itinerary WHERE package_id = ? ORDER BY day_no ASC',
+    [id]
+  );
 
-  await ctx.db.query('UPDATE tour_packages SET status = ? WHERE package_id = ?', [body.status, id]);
-  await logAction(ctx, 'PACKAGE_STATUS_CHANGED', `Provider ${user.user_id} set package ${id} to ${body.status}`);
-  return { data: { package_id: id, status: body.status } };
-}
+  // Availability (public sees future OPEN dates with seats on or after today)
+  const availSql = (isOwner || isAdmin)
+    ? 'SELECT availability_id, available_date, seats_available, status FROM package_availability WHERE package_id = ? ORDER BY available_date ASC'
+    : "SELECT availability_id, available_date, seats_available, status FROM package_availability WHERE package_id = ? AND status = 'OPEN' AND seats_available > 0 AND available_date >= CURDATE() ORDER BY available_date ASC";
 
-/** PROVIDER: DELETE /api/provider/packages/:id */
-async function deleteProviderPackage(ctx) {
-  const user = ctx.user;
-  if (!user || user.role !== 'PROVIDER') throw new HttpError(401, 'UNAUTHENTICATED');
-  const id = Number(ctx.params.id);
-  if (!id) throw new HttpError(400, 'VALIDATION_ERROR', 'Invalid package id');
+  const availRows = await ctx.db.query(availSql, [id]);
 
-  const [ownerRows] = await ctx.db.query('SELECT provider_id FROM tour_packages WHERE package_id = ?', [id]);
-  if (!ownerRows.length) throw new HttpError(404, 'NOT_FOUND', 'Package not found');
-  if (ownerRows[0].provider_id !== user.user_id) throw new HttpError(403, 'FORBIDDEN', 'Not owner');
+  // Rating
+  const ratingRows = await ctx.db.query(
+    'SELECT ROUND(AVG(rating), 1) AS avg, COUNT(review_id) AS count FROM reviews WHERE package_id = ?',
+    [id]
+  );
+  const ratingRow = ratingRows && ratingRows.length ? ratingRows[0] : null;
 
-  const [bookingRows] = await ctx.db.query('SELECT booking_id FROM bookings WHERE package_id = ? AND booking_status != "CANCELLED" LIMIT 1', [id]);
-  if (bookingRows.length) throw new HttpError(409, 'CONFLICT', 'Package has active bookings');
+  const inclusions = typeof pkg.inclusions === 'string'
+    ? pkg.inclusions.split('\n').map(s => s.trim()).filter(Boolean)
+    : (Array.isArray(pkg.inclusions) ? pkg.inclusions : []);
 
-  await ctx.db.query('DELETE FROM tour_packages WHERE package_id = ?', [id]);
-  await logAction(ctx, 'PACKAGE_DELETED', `Provider ${user.user_id} deleted package ${id}`);
-  return { data: { package_id: id } };
+  const exclusions = typeof pkg.exclusions === 'string'
+    ? pkg.exclusions.split('\n').map(s => s.trim()).filter(Boolean)
+    : (Array.isArray(pkg.exclusions) ? pkg.exclusions : []);
+
+  const data = {
+    package_id:       Number(pkg.package_id),
+    title:            pkg.title,
+    description:      pkg.description,
+    duration_days:    Number(pkg.duration_days),
+    price:            Number(pkg.price),
+    capacity:         Number(pkg.capacity),
+    image:            pkg.image || null,
+    status:           pkg.status,
+    created_at:       pkg.created_at instanceof Date ? pkg.created_at.toISOString() : String(pkg.created_at),
+    inclusions,
+    exclusions,
+    destination_id:   Number(pkg.destination_id),
+    destination_name: pkg.destination_name,
+    city:             pkg.destination_city,
+    state:            pkg.destination_state,
+    destination: {
+      destination_id: Number(pkg.destination_id),
+      name:           pkg.destination_name,
+      city:           pkg.destination_city,
+      state:          pkg.destination_state,
+      country:        pkg.destination_country,
+      description:    pkg.destination_description
+    },
+    category_id:      Number(pkg.category_id),
+    category_name:    pkg.category_name,
+    category: {
+      category_id:    Number(pkg.category_id),
+      name:           pkg.category_name,
+      description:    pkg.category_description
+    },
+    provider_id:      Number(pkg.provider_id),
+    provider_name:    pkg.provider_name,
+    provider: {
+      user_id:        Number(pkg.provider_id),
+      name:           pkg.provider_name,
+      city:           pkg.provider_city || null,
+      state:          pkg.provider_state || null
+    },
+    itinerary: (itineraryRows || []).map(i => ({
+      day_no:      Number(i.day_no),
+      title:       i.title,
+      description: i.description
+    })),
+    availability: (availRows || []).map(a => ({
+      availability_id: Number(a.availability_id),
+      available_date:  formatDate(a.available_date),
+      seats_available: Number(a.seats_available),
+      status:          a.status
+    })),
+    rating: {
+      avg:   ratingRow?.avg !== null && ratingRow?.avg !== undefined ? Number(ratingRow.avg) : null,
+      count: Number(ratingRow?.count || 0)
+    }
+  };
+
+  return { data };
 }
 
 module.exports = [
-  { method: 'GET', path: '/api/packages', handler: listPackages },
-  { method: 'GET', path: '/api/packages/:id', handler: getPackageDetail },
-  { method: 'GET', path: '/api/provider/packages', handler: listProviderPackages, roles: ['PROVIDER'] },
-  { method: 'GET', path: '/api/provider/packages/:id', handler: getProviderPackage, roles: ['PROVIDER'] },
-  { method: 'POST', path: '/api/provider/packages', handler: createProviderPackage, roles: ['PROVIDER'] },
-  { method: 'PUT', path: '/api/provider/packages/:id', handler: updateProviderPackage, roles: ['PROVIDER'] },
-  { method: 'PATCH', path: '/api/provider/packages/:id/status', handler: patchProviderPackageStatus, roles: ['PROVIDER'] },
-  { method: 'DELETE', path: '/api/provider/packages/:id', handler: deleteProviderPackage, roles: ['PROVIDER'] }
+  {
+    method:  'GET',
+    path:    '/api/packages',
+    handler: getPackages
+  },
+  {
+    method:  'GET',
+    path:    '/api/packages/:id',
+    handler: getPackageById
+  }
 ];

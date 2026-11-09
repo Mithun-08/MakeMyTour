@@ -3,21 +3,465 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Customer Dashboard | MakeMyTour</title>
+  <title>Customer Dashboard | MakeMyTour — Local Tourism Package Booking</title>
+  <meta name="description" content="View your tour booking overview, statistics, upcoming trips, and travel activity on MakeMyTour.">
+
+  <!-- Shared stylesheet -->
   <link rel="stylesheet" href="/css/style.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* Customer Dashboard Scoped Styles */
+    .dashboard-header {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-4);
+      margin-bottom: var(--sp-6);
+    }
+    @media (min-width: 768px) {
+      .dashboard-header {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-2);
+      font-size: var(--text-sm);
+      margin-bottom: var(--sp-3);
+      color: var(--color-text-muted);
+    }
+    .breadcrumb a {
+      color: var(--color-text-muted);
+      text-decoration: none;
+    }
+    .breadcrumb a:hover {
+      color: var(--color-primary);
+      text-decoration: underline;
+    }
+
+    /* KPI Summary Cards Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--sp-4);
+      margin-bottom: var(--sp-6);
+    }
+    @media (min-width: 600px) {
+      .kpi-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .kpi-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      padding: var(--sp-5);
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--sp-4);
+    }
+    .kpi-card-info {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-1);
+    }
+    .kpi-card-label {
+      font-size: var(--text-xs);
+      font-weight: var(--font-semi);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-muted);
+    }
+    .kpi-card-value {
+      font-size: var(--text-3xl);
+      font-weight: var(--font-bold);
+      color: var(--color-text);
+      line-height: 1.1;
+    }
+    .kpi-card-hint {
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+    }
+    .kpi-card-icon {
+      font-size: 2.2rem;
+      background: var(--color-surface-sunken);
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-md);
+      flex-shrink: 0;
+    }
+
+    /* Status Breakdown Grid */
+    .status-summary-section {
+      margin-bottom: var(--sp-6);
+    }
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--sp-3);
+      margin-top: var(--sp-3);
+    }
+    @media (min-width: 768px) {
+      .status-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    .status-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-md);
+      padding: var(--sp-4);
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-1);
+      text-decoration: none;
+      color: var(--color-text);
+      box-shadow: var(--shadow-sm);
+      transition: transform var(--transition), border-color var(--transition);
+    }
+    .status-card:hover {
+      border-color: var(--color-primary);
+      transform: translateY(-2px);
+    }
+    .status-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .status-card-label {
+      font-size: var(--text-xs);
+      font-weight: var(--font-semi);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-muted);
+    }
+    .status-card-count {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-bold);
+      color: var(--color-text);
+      margin-top: var(--sp-1);
+    }
+
+    /* Upcoming Trips Layout */
+    .upcoming-section {
+      margin-bottom: var(--sp-6);
+    }
+    .section-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--sp-4);
+      flex-wrap: wrap;
+      gap: var(--sp-2);
+    }
+    .upcoming-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--sp-4);
+    }
+    @media (min-width: 768px) {
+      .upcoming-grid {
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      }
+    }
+
+    .upcoming-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      transition: transform var(--transition), box-shadow var(--transition);
+    }
+    .upcoming-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow);
+    }
+    .upcoming-card-thumb {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+      background: var(--color-surface-sunken);
+      border-bottom: 1px solid var(--color-border-light);
+    }
+    .upcoming-card-body {
+      padding: var(--sp-4);
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      gap: var(--sp-2);
+    }
+    .upcoming-card-title {
+      font-size: var(--text-base);
+      font-weight: var(--font-semi);
+      color: var(--color-text);
+      margin: 0;
+      line-height: 1.4;
+    }
+    .upcoming-card-meta {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-1);
+      font-size: var(--text-xs);
+      color: var(--color-text-muted);
+      margin-top: var(--sp-1);
+    }
+    .upcoming-card-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .upcoming-card-footer {
+      padding: var(--sp-3) var(--sp-4);
+      background: var(--color-surface-sunken);
+      border-top: 1px solid var(--color-border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Explore Packages Banner CTA */
+    .explore-banner {
+      background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-surface) 100%);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      padding: var(--sp-6);
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-4);
+      margin-top: var(--sp-8);
+      box-shadow: var(--shadow-sm);
+    }
+    @media (min-width: 768px) {
+      .explore-banner {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+    }
+    .explore-banner-content {
+      max-width: 580px;
+    }
+    .explore-banner-title {
+      font-size: var(--text-xl);
+      font-weight: var(--font-semi);
+      color: var(--color-text);
+      margin: 0 0 var(--sp-2) 0;
+    }
+    .explore-banner-desc {
+      font-size: var(--text-sm);
+      color: var(--color-text-muted);
+      margin: 0;
+      line-height: 1.6;
+    }
+  </style>
 </head>
 <body>
+
+  <!-- Site header rendered by layout.js -->
   <header id="site-header"></header>
-  <main id="app" class="container">
-    <h1>Customer Dashboard</h1>
-    <section id="welcome-section"></section>
-    <section id="summary-section"></section>
+
+  <!-- Main Content Container -->
+  <main id="app" class="container" style="padding-top: var(--sp-6); padding-bottom: var(--sp-16);" aria-busy="false">
+
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/index.html">Home</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">Dashboard</span>
+    </nav>
+
+    <!-- 1. Customer Welcome / Header Section -->
+    <section class="dashboard-header" id="welcome-section" aria-labelledby="customer-welcome-heading">
+      <div>
+        <h1 id="customer-welcome-heading" style="margin-bottom: var(--sp-2);">Welcome back!</h1>
+        <p class="text-muted" id="customer-welcome-sub" style="margin: 0;">
+          Here is a summary of your tour reservations, upcoming departures, and travel activity.
+        </p>
+      </div>
+      <div style="display: flex; gap: var(--sp-3); flex-wrap: wrap;">
+        <a href="/packages.html" class="btn btn-primary" id="btn-header-explore">
+          Explore Packages
+        </a>
+        <a href="/customer-bookings.html" class="btn btn-secondary" id="btn-header-bookings">
+          My Bookings
+        </a>
+      </div>
+    </section>
+
+    <!-- 2. Loading State Block -->
+    <div id="dashboard-loading" class="state-box state-loading" aria-live="polite">
+      <div class="state-box-icon" aria-hidden="true">⏳</div>
+      <div class="state-box-title">Loading dashboard…</div>
+      <div class="state-box-body">Please wait while we retrieve your travel summary and upcoming departures.</div>
+    </div>
+
+    <!-- 3. Error State Block -->
+    <div id="dashboard-error" class="state-box state-error" hidden role="alert">
+      <div class="state-box-icon" aria-hidden="true">⚠️</div>
+      <div class="state-box-title">Unable to load dashboard</div>
+      <div class="state-box-body" id="dashboard-error-msg">Something went wrong while retrieving your dashboard data.</div>
+      <div style="display: flex; gap: var(--sp-3); margin-top: var(--sp-4);">
+        <button type="button" class="btn btn-secondary" id="btn-retry-dashboard">Try Again</button>
+        <a href="/customer-bookings.html" class="btn btn-ghost">View My Bookings</a>
+      </div>
+    </div>
+
+    <!-- 4. Main Dashboard Content (Populated by JavaScript Controller) -->
+    <div id="dashboard-content" hidden>
+
+      <!-- Section: Summary KPI Cards -->
+      <section aria-label="Booking and spending statistics" class="kpi-grid">
+
+        <!-- KPI 1: Total Bookings -->
+        <div class="kpi-card" id="card-kpi-total-bookings">
+          <div class="kpi-card-info">
+            <span class="kpi-card-label">Total Bookings</span>
+            <span class="kpi-card-value" id="kpi-total-bookings">0</span>
+            <span class="kpi-card-hint">All-time reservations placed</span>
+          </div>
+          <div class="kpi-card-icon" aria-hidden="true">🎒</div>
+        </div>
+
+        <!-- KPI 2: Total Spent -->
+        <div class="kpi-card" id="card-kpi-total-spent">
+          <div class="kpi-card-info">
+            <span class="kpi-card-label">Total Spent</span>
+            <span class="kpi-card-value" id="kpi-total-spent">₹0.00</span>
+            <span class="kpi-card-hint">Confirmed & paid bookings</span>
+          </div>
+          <div class="kpi-card-icon" aria-hidden="true">💳</div>
+        </div>
+
+      </section>
+
+      <!-- Section: Booking Status Breakdown -->
+      <section class="status-summary-section" id="section-status-summary" aria-labelledby="heading-status-summary">
+        <h2 style="font-size: var(--text-lg); margin-bottom: var(--sp-2);" id="heading-status-summary">
+          Bookings by Status
+        </h2>
+
+        <div class="status-grid">
+          <!-- Pending Status Card -->
+          <a href="/customer-bookings.html?status=PENDING" class="status-card" id="card-status-pending" title="View pending bookings">
+            <div class="status-card-header">
+              <span class="status-card-label" style="color: var(--color-warning);">Pending</span>
+              <span class="badge badge-pending">PENDING</span>
+            </div>
+            <div class="status-card-count" id="status-count-pending">0</div>
+          </a>
+
+          <!-- Confirmed Status Card -->
+          <a href="/customer-bookings.html?status=CONFIRMED" class="status-card" id="card-status-confirmed" title="View confirmed bookings">
+            <div class="status-card-header">
+              <span class="status-card-label" style="color: var(--color-success);">Confirmed</span>
+              <span class="badge badge-confirmed">CONFIRMED</span>
+            </div>
+            <div class="status-card-count" id="status-count-confirmed">0</div>
+          </a>
+
+          <!-- Completed Status Card -->
+          <a href="/customer-bookings.html?status=COMPLETED" class="status-card" id="card-status-completed" title="View completed bookings">
+            <div class="status-card-header">
+              <span class="status-card-label" style="color: var(--color-primary);">Completed</span>
+              <span class="badge badge-completed">COMPLETED</span>
+            </div>
+            <div class="status-card-count" id="status-count-completed">0</div>
+          </a>
+
+          <!-- Cancelled Status Card -->
+          <a href="/customer-bookings.html?status=CANCELLED" class="status-card" id="card-status-cancelled" title="View cancelled bookings">
+            <div class="status-card-header">
+              <span class="status-card-label" style="color: var(--color-danger);">Cancelled</span>
+              <span class="badge badge-cancelled">CANCELLED</span>
+            </div>
+            <div class="status-card-count" id="status-count-cancelled">0</div>
+          </a>
+        </div>
+      </section>
+
+      <!-- Section: Upcoming Trips -->
+      <section class="upcoming-section" id="section-upcoming-trips" aria-labelledby="heading-upcoming-trips">
+        <div class="section-header-row">
+          <div>
+            <h2 style="font-size: var(--text-xl); margin: 0;" id="heading-upcoming-trips">Upcoming Trips</h2>
+            <span class="text-sm text-muted" id="upcoming-trips-count" aria-live="polite">0 upcoming tours</span>
+          </div>
+          <a href="/customer-bookings.html" id="link-view-all-bookings" class="text-sm" style="color: var(--color-primary); font-weight: var(--font-semi); text-decoration: none;">
+            View all bookings →
+          </a>
+        </div>
+
+        <!-- Upcoming Trips Dynamic Container -->
+        <div id="upcoming-trips-container" class="upcoming-grid" aria-live="polite">
+          <!-- Populated dynamically by customer-dashboard.js -->
+        </div>
+
+        <!-- Empty State for Upcoming Trips -->
+        <div id="upcoming-empty" class="state-box state-empty" hidden>
+          <img src="/assets/images/empty-trips.svg" alt="No upcoming trips illustration" width="120" height="80" style="margin: 0 auto var(--sp-2); border-radius: var(--radius);" onerror="this.style.display='none'">
+          <div class="state-box-icon" aria-hidden="true">🌴</div>
+          <div class="state-box-title">No upcoming trips</div>
+          <div class="state-box-body">
+            You don't have any upcoming tours scheduled at this time. Discover exciting local destinations and plan your next journey!
+          </div>
+          <a href="/packages.html" class="btn btn-primary" id="btn-empty-explore" style="margin-top: var(--sp-4);">
+            Explore Tour Packages
+          </a>
+        </div>
+      </section>
+
+      <!-- Section: Explore Packages CTA Banner -->
+      <section class="explore-banner" id="explore-packages-banner" aria-labelledby="heading-explore-banner">
+        <div style="display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap;">
+          <img src="/assets/images/dashboard-banner.jpg" alt="Scenic mountain and coastal travel view" width="110" height="72" style="width: 110px; height: 72px; object-fit: cover; border-radius: var(--radius); flex-shrink: 0;" onerror="this.style.display='none'">
+          <div class="explore-banner-content">
+            <h2 class="explore-banner-title" id="heading-explore-banner">Ready for your next adventure?</h2>
+            <p class="explore-banner-desc">
+              Browse verified tour packages curated by certified local operators across India. Flexible dates, seamless bookings, and memorable experiences await.
+            </p>
+          </div>
+        </div>
+        <div>
+          <a href="/packages.html" class="btn btn-primary" id="btn-banner-explore">
+            Explore All Packages
+          </a>
+        </div>
+      </section>
+
+    </div>
+
   </main>
+
+  <!-- Site footer rendered by layout.js -->
   <footer id="site-footer"></footer>
+
+  <!-- Shared Foundation Scripts (in required order) -->
   <script src="/js/api.js"></script>
-  <script src="/js/ui.js"></script>
   <script src="/js/auth.js"></script>
+  <script src="/js/ui.js"></script>
   <script src="/js/layout.js"></script>
+
+  <!-- Page Controller Script -->
   <script src="/js/pages/customer-dashboard.js"></script>
+
 </body>
 </html>
+

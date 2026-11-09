@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log In | MakeMyTour — Local Tourism Packages</title>
+  <meta name="description" content="Log in to MakeMyTour to manage your bookings, discover curated packages, or manage your provider listings.">
+
+  <!-- Shared stylesheet -->
+  <link rel="stylesheet" href="/css/style.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Header filled by layout.js -->
+  <header id="site-header"></header>
+
+  <main id="app" class="container" style="padding-top: var(--sp-8); padding-bottom: var(--sp-12);">
+    <div class="card" style="max-width: 440px; margin: 0 auto; padding: var(--sp-8); box-shadow: var(--shadow-md);">
+
+      <div style="text-align: center; margin-bottom: var(--sp-6);">
+        <span style="font-size: 2.5rem;" aria-hidden="true">🧭</span>
+        <h1 style="font-size: var(--text-2xl); font-weight: var(--font-bold); margin-top: var(--sp-2); margin-bottom: var(--sp-2);">Welcome Back</h1>
+        <p class="text-muted" style="font-size: var(--text-sm);">Log in to access your MakeMyTour account</p>
+      </div>
+
+      <!-- Info Banner (for ?registered=1 or ?pending=1) -->
+      <div id="login-info" class="alert alert-info" role="status" style="display: none; margin-bottom: var(--sp-5);">
+        <span class="alert-icon" aria-hidden="true">ℹ</span>
+        <div class="alert-body">
+          <div id="login-info-msg" class="alert-msg"></div>
+        </div>
+      </div>
+
+      <!-- Error Alert -->
+      <div id="login-alert" class="alert alert-error" role="alert" style="display: none; margin-bottom: var(--sp-5);">
+        <span class="alert-icon" aria-hidden="true">⚠️</span>
+        <div class="alert-body">
+          <div class="alert-title">Unable to log in</div>
+          <div id="login-alert-msg" class="alert-msg"></div>
+        </div>
+      </div>
+
+      <!-- Login Form -->
+      <form id="login-form" class="form" novalidate>
+        <div class="field">
+          <label class="field-label" for="login-email">
+            Email Address <span class="required">*</span>
+          </label>
+          <input
+            type="email"
+            id="login-email"
+            name="email"
+            class="field-input"
+            placeholder="name@example.com"
+            required
+            autocomplete="email"
+          >
+          <span class="field-error"></span>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="login-password">
+            Password <span class="required">*</span>
+          </label>
+          <input
+            type="password"
+            id="login-password"
+            name="password"
+            class="field-input"
+            placeholder="••••••••"
+            required
+            autocomplete="current-password"
+          >
+          <span class="field-error"></span>
+        </div>
+
+        <button type="submit" id="login-submit-btn" class="btn btn-primary btn-block btn-lg" style="margin-top: var(--sp-2);">
+          Log in
+        </button>
+      </form>
+
+      <div style="text-align: center; margin-top: var(--sp-6); padding-top: var(--sp-4); border-top: 1px solid var(--color-border-light); font-size: var(--text-sm);">
+        <p class="text-muted">
+          Don't have an account? <a href="/register.html" style="font-weight: var(--font-semi); color: var(--color-primary);">Register here</a>
+        </p>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer filled by layout.js -->
+  <footer id="site-footer"></footer>
+
+  <!-- Foundation scripts — order matters per CONTRACT §1.8 -->
+  <script src="/js/api.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/layout.js"></script>
+
+  <!-- Page-specific script -->
+  <script src="/js/pages/login.js"></script>
+
+</body>
+</html>

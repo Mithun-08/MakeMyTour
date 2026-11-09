@@ -15,15 +15,56 @@
 (function () {
   'use strict';
 
-  /* ── DOM refs ──────────────────────────────────────────────── */
-  var destList       = document.getElementById('home-dest-list');
-  var featuredGrid   = document.getElementById('home-featured-grid');
-  var searchForm     = document.getElementById('home-search-form');
-  var searchInput    = document.getElementById('home-search-input');
-  var heroSearchForm = document.getElementById('hero-search-form');
-  var heroSearchInput= document.getElementById('hero-search-input');
+  var DEFAULT_PLACEHOLDER_IMG = '/assets/images/placeholder.jpg';
 
-  /* ── Destination chips ─────────────────────────────────────── */
+  var DEST_IMAGE_MAP = {
+    munnar:    '/assets/images/dest-munnar.jpg',
+    hampi:     '/assets/images/dest-hampi.jpg',
+    jaisalmer: '/assets/images/dest-jaisalmer.jpg',
+    coorg:     '/assets/images/dest-coorg.jpg',
+    havelock:  '/assets/images/dest-andaman.jpg',
+    andaman:   '/assets/images/dest-andaman.jpg',
+    spiti:     '/assets/images/dest-spiti.jpg'
+  };
+
+  function formatImageUrl(image) {
+    if (!image || typeof image !== 'string') return DEFAULT_PLACEHOLDER_IMG;
+    var trimmed = image.trim();
+    if (!trimmed) return DEFAULT_PLACEHOLDER_IMG;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('/')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('images/')) {
+      return '/assets/' + trimmed;
+    }
+    if (trimmed.startsWith('assets/')) {
+      return '/' + trimmed;
+    }
+    return '/assets/images/' + trimmed;
+  }
+
+  function getDestinationImage(dest) {
+    var text = ((dest && dest.name) || '') + ' ' + ((dest && dest.city) || '') + ' ' + ((dest && dest.state) || '');
+    var lower = text.toLowerCase();
+    var keys = Object.keys(DEST_IMAGE_MAP);
+    for (var i = 0; i < keys.length; i++) {
+      if (lower.indexOf(keys[i]) !== -1) {
+        return DEST_IMAGE_MAP[keys[i]];
+      }
+    }
+    return DEFAULT_PLACEHOLDER_IMG;
+  }
+
+  /* ── DOM refs ──────────────────────────────────────────────── */
+  var destGrid        = document.getElementById('home-dest-grid');
+  var destList        = document.getElementById('home-dest-list');
+  var featuredGrid    = document.getElementById('home-featured-grid');
+  var searchForm      = document.getElementById('home-search-form');
+  var searchInput     = document.getElementById('home-search-input');
+  var heroSearchForm  = document.getElementById('hero-search-form');
+  var heroSearchInput = document.getElementById('hero-search-input');
+
+  /* ── Destination cards & chips ─────────────────────────────── */
 
   function loadDestinations() {
     if (!destList) return;
@@ -31,7 +72,8 @@
 
     api.get('/api/destinations').then(function (res) {
       var items = res.data;
-      destList.innerHTML = '';   // safe — no user content yet
+      destList.innerHTML = '';
+      if (destGrid) destGrid.innerHTML = '';
 
       if (!items || !items.length) {
         UI.empty(destList, 'No destinations listed yet. Check back soon!');
@@ -39,16 +81,52 @@
       }
 
       items.forEach(function (dest) {
+        var targetUrl = '/packages.html?destination_id=' + encodeURIComponent(dest.destination_id);
+
+        if (destGrid) {
+          var card = document.createElement('a');
+          card.className = 'dest-card';
+          card.href = targetUrl;
+
+          var dImg = document.createElement('img');
+          dImg.src = getDestinationImage(dest);
+          dImg.alt = (dest.name || 'Destination') + (dest.state ? ', ' + dest.state : '');
+          dImg.loading = 'lazy';
+          dImg.addEventListener('error', function () {
+            if (dImg.src.indexOf('placeholder-travel.svg') === -1) {
+              dImg.src = '/assets/images/placeholder-travel.svg';
+            }
+          });
+
+          var overlay = document.createElement('div');
+          overlay.className = 'dest-card-overlay';
+
+          var dTitle = document.createElement('div');
+          dTitle.className = 'dest-card-title';
+          dTitle.textContent = dest.name || 'Destination';
+
+          var dSub = document.createElement('div');
+          dSub.className = 'dest-card-sub';
+          var pkgCount = typeof dest.package_count === 'number' ? dest.package_count : 0;
+          dSub.textContent = (dest.state ? dest.state + ' · ' : '') + pkgCount + (pkgCount === 1 ? ' package' : ' packages');
+
+          overlay.appendChild(dTitle);
+          overlay.appendChild(dSub);
+          card.appendChild(dImg);
+          card.appendChild(overlay);
+          destGrid.appendChild(card);
+        }
+
         var a = document.createElement('a');
         a.className = 'dest-chip';
-        a.href = '/packages.html?destination_id=' + encodeURIComponent(dest.destination_id);
+        a.href = targetUrl;
 
         var icon = document.createElement('span');
         icon.setAttribute('aria-hidden', 'true');
         icon.textContent = '📍';
 
         var label = document.createElement('span');
-        label.textContent = dest.name;   // textContent — safe
+        label.textContent = dest.name;
 
         var count = document.createElement('span');
         count.style.color = 'var(--color-text-muted)';
@@ -83,19 +161,22 @@
     var imgWrap = document.createElement('div');
     imgWrap.className = 'pkg-card-img';
 
-    if (pkg.image) {
-      var img = document.createElement('img');
-      img.src = '/images/' + pkg.image;
-      img.alt = pkg.title;   // pkg.title is server data, safe for alt attribute
-      img.loading = 'lazy';
-      imgWrap.appendChild(img);
-    } else {
-      var placeholder = document.createElement('div');
-      placeholder.className = 'pkg-card-img-placeholder';
-      placeholder.setAttribute('aria-hidden', 'true');
-      placeholder.textContent = '🏔️';
-      imgWrap.appendChild(placeholder);
-    }
+    var img = document.createElement('img');
+    img.src = formatImageUrl(pkg.image);
+    img.alt = (pkg.title || 'Tour package') + (pkg.destination_name ? ' in ' + pkg.destination_name : '');
+    img.loading = 'lazy';
+    img.addEventListener('error', function () {
+      if (img.src.indexOf('placeholder.jpg') === -1) {
+        img.src = DEFAULT_PLACEHOLDER_IMG;
+      } else if (img.parentNode) {
+        var fallback = document.createElement('div');
+        fallback.className = 'pkg-card-img-placeholder';
+        fallback.setAttribute('aria-hidden', 'true');
+        fallback.textContent = '🏔️';
+        img.parentNode.replaceChild(fallback, img);
+      }
+    });
+    imgWrap.appendChild(img);
 
     /* Badge (category) */
     if (pkg.category_name) {
@@ -119,7 +200,7 @@
 
     var title = document.createElement('h3');
     title.className = 'pkg-card-title';
-    title.textContent = pkg.title;   // textContent — safe
+    title.textContent = pkg.title;
 
     /* Meta row */
     var meta = document.createElement('div');

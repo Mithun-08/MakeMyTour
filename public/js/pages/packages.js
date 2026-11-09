@@ -139,6 +139,24 @@
     return node;
   }
 
+  var DEFAULT_PLACEHOLDER_IMG = '/assets/images/placeholder.jpg';
+
+  function formatImageUrl(image) {
+    if (!image || typeof image !== 'string') return DEFAULT_PLACEHOLDER_IMG;
+    var trimmed = image.trim();
+    if (!trimmed) return DEFAULT_PLACEHOLDER_IMG;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('/')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('images/')) {
+      return '/assets/' + trimmed;
+    }
+    if (trimmed.startsWith('assets/')) {
+      return '/' + trimmed;
+    }
+    return '/assets/images/' + trimmed;
+  }
+
   function buildPackageCard(pkg) {
     var detailUrl = '/package-detail.html?id=' + encodeURIComponent(pkg.package_id);
 
@@ -146,18 +164,18 @@
 
     /* Image */
     var imgWrap = el('div', 'pkg-card-img');
-    if (pkg.image) {
-      var img = document.createElement('img');
-      img.src = '/images/' + encodeURIComponent(pkg.image);
-      img.alt = pkg.title || 'Package image';
-      img.loading = 'lazy';
-      img.addEventListener('error', function () {
+    var img = document.createElement('img');
+    img.src = formatImageUrl(pkg.image);
+    img.alt = (pkg.title || 'Package image') + (pkg.destination_name ? ' in ' + pkg.destination_name : '');
+    img.loading = 'lazy';
+    img.addEventListener('error', function () {
+      if (img.src.indexOf('placeholder.jpg') === -1) {
+        img.src = DEFAULT_PLACEHOLDER_IMG;
+      } else if (imgWrap.contains(img)) {
         imgWrap.replaceChild(placeholder(), img);
-      });
-      imgWrap.appendChild(img);
-    } else {
-      imgWrap.appendChild(placeholder());
-    }
+      }
+    });
+    imgWrap.appendChild(img);
     if (pkg.category_name) {
       var badgeWrap = el('div', 'pkg-card-badge');
       badgeWrap.appendChild(el('span', 'badge badge-active', pkg.category_name));
@@ -168,7 +186,13 @@
     var body = el('div', 'pkg-card-body');
     var place = [pkg.destination_name, pkg.state].filter(Boolean).join(', ');
     body.appendChild(el('p', 'pkg-card-dest', place ? '📍 ' + place : ''));
-    body.appendChild(el('h3', 'pkg-card-title', pkg.title));
+    var titleH3 = el('h3', 'pkg-card-title');
+    var titleLink = el('a', null, pkg.title);
+    titleLink.href = detailUrl;
+    titleLink.style.color = 'inherit';
+    titleLink.style.textDecoration = 'none';
+    titleH3.appendChild(titleLink);
+    body.appendChild(titleH3);
 
     var meta = el('div', 'pkg-card-meta');
     if (pkg.duration_days) {
